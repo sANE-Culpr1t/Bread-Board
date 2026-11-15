@@ -4,6 +4,7 @@ using System.Windows;
 using System.Windows.Controls;
 using BreadBoard.Core;
 using BreadBoard.Core.Config;
+using BreadBoard.Core.Models;
 using static BreadBoard.App.Views.Pages.PageKit;
 
 namespace BreadBoard.App.Views.Pages;
@@ -34,6 +35,22 @@ public sealed class SettingsPage : UserControl
         var gaming = new StackPanel();
         gaming.Children.Add(Row("Open mini-player on start", "Shows the floating window as soon as Bread Board launches.", openOnStart));
         gaming.Children.Add(Row("Keep mini-player on top", "Stays above other windows, including windowed games.", onTop));
+        var opacity = new Slider { Width = 160, Minimum = 40, Maximum = 100, Value = ui.MiniOpacity, IsSnapToTickEnabled = true, TickFrequency = 5 };
+        System.Windows.Automation.AutomationProperties.SetName(opacity, "Mini-player opacity");
+        var opacityText = Text($"{ui.MiniOpacity}%", 14);
+        opacityText.Width = 44;
+        opacityText.TextAlignment = TextAlignment.Right;
+        opacity.ValueChanged += (_, _) =>
+        {
+            var v = (int)opacity.Value;
+            opacityText.Text = $"{v}%";
+            config.Update(c => c.Ui.MiniOpacity = v);
+            window.MiniPlayer?.SetOpacity(v);
+        };
+        var opacityRow = new StackPanel { Orientation = Orientation.Horizontal };
+        opacityRow.Children.Add(opacity);
+        opacityRow.Children.Add(opacityText);
+        gaming.Children.Add(Row("Mini-player opacity", "See through it to the game behind (40-100 %).", opacityRow));
         gaming.Children.Add(Row("Mini-player", "A compact window for use while gaming.", open, last: true));
         root.Children.Add(Card(gaming));
 
@@ -75,9 +92,36 @@ public sealed class SettingsPage : UserControl
         root.Children.Add(Card(playback));
 
         root.Children.Add(SectionTitle("Profiles"));
+        var intro = Text("Each profile keeps its own sound shortcuts and routing, global shortcuts, mixer levels, voice processing, microphone/monitor switches and app choice. Your sounds are shared. Changes always go to the active profile; switching keeps them.", 13, muted: true);
+        intro.Margin = new Thickness(0, 0, 0, 10);
+        root.Children.Add(intro);
         var profiles = new StackPanel();
-        profiles.Children.Add(Row("Gaming · General use · Streaming · Custom",
-            "Save and switch sound assignments, hotkeys, mixer levels and routing.", Pending("Iteration 5"), last: true));
+        void BuildProfiles()
+        {
+            profiles.Children.Clear();
+            for (var i = 0; i < ProfileService.Names.Length; i++)
+            {
+                var name = ProfileService.Names[i];
+                var active = name == sb.ActiveProfile;
+                FrameworkElement control;
+                if (active)
+                {
+                    var chip = Pending("Active");
+                    ((TextBlock)chip.Child).Foreground = (System.Windows.Media.Brush)Application.Current.FindResource("OkBrush");
+                    control = chip;
+                }
+                else
+                {
+                    var b = PageKit.Button("Switch", "GhostButton", tooltip: $"Switch to {name}");
+                    System.Windows.Automation.AutomationProperties.SetName(b, $"Switch to {name}");
+                    b.Click += async (_, _) => await sb.SwitchProfileAsync(name);
+                    control = b;
+                }
+                profiles.Children.Add(Row(name, ProfileService.Descriptions[name], control, last: i == ProfileService.Names.Length - 1));
+            }
+        }
+        BuildProfiles();
+        sb.ProfileChanged += BuildProfiles;
         root.Children.Add(Card(profiles));
 
         root.Children.Add(SectionTitle("Data"));

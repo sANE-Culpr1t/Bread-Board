@@ -24,8 +24,8 @@ public static class ScreenshotTour
         await rendered.Task.WaitAsync(TimeSpan.FromSeconds(20)).ConfigureAwait(true);
         if (host.Soundboard.Items.Count == 0) await SeedAsync(host).ConfigureAwait(true);
         if (host.Soundboard.Config.Devices.AppSource is null
-            && (await host.Soundboard.ListAppsAsync().ConfigureAwait(true)).FirstOrDefault(a => a.IsPlaying) is { } playing)
-            await host.Soundboard.SelectAppAsync(playing).ConfigureAwait(true); // show the App Audio strip live
+            && (await host.Soundboard.ListAppsAsync().ConfigureAwait(true)).FirstOrDefault(a => a.ProcessName == "bb" && a.IsPlaying) is { } helper)
+            await host.Soundboard.SelectAppAsync(helper).ConfigureAwait(true); // only the `bb tone` test helper — never a real app
 
         window.WindowState = WindowState.Normal;
         await Task.Delay(500).ConfigureAwait(true);
@@ -94,7 +94,7 @@ public static class ScreenshotTour
         {
             var wav = WriteSilence(Path.Combine(src, s.Name.Replace(' ', '_') + ".wav"), s.Secs);
             if (await sb.ImportFilesAsync([wav], s.Cat).ConfigureAwait(true) is [var item, ..])
-                await sb.SaveAsync(item.Id, new Services.SoundEdit(s.Name, s.Cat, s.Key, s.Mode, 80, s.Fav, s.Icon, s.Tint)).ConfigureAwait(true);
+                await sb.SaveAsync(item.Id, new Services.SoundEdit(s.Name, s.Cat, s.Key, s.Mode, 80, s.Fav, s.Icon, s.Tint, s.Name == "Applause" ? Core.Models.SoundRoute.MicOnly : Core.Models.SoundRoute.Both)).ConfigureAwait(true);
         }
         // One sound whose file has gone missing.
         var missing = sb.Library.Add(Path.Combine(src, "deleted.wav"), "Old Intro", "Music", null);

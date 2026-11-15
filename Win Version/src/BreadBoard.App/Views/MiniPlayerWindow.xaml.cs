@@ -29,7 +29,7 @@ public partial class MiniPlayerWindow : Window
         InitializeComponent();
         var ui = config.Current.Ui;
         Width = Math.Max(MinWidth, ui.MiniWidth);
-        Height = Math.Max(MinHeight, ui.MiniHeight);
+        Height = Math.Max(480, ui.MiniHeight); // room for the quick list and profile switcher
         if (ui.MiniLeft is { } l && ui.MiniTop is { } t && MainWindow.IsOnScreen(l, t))
         {
             WindowStartupLocation = WindowStartupLocation.Manual;
@@ -63,17 +63,33 @@ public partial class MiniPlayerWindow : Window
         StopAllButton.Click += (_, _) => _sb.StopAll();
         MicButton.Click += (_, _) => _sb.ToggleMicMute();
         MasterButton.Click += (_, _) => _sb.ToggleMasterMute();
+        SetOpacity(ui.MiniOpacity);
+        (ui.MiniTab == "Recent" ? RecentTab : FavTab).IsChecked = true;
+        FavTab.Checked += (_, _) => { _config.Update(c => c.Ui.MiniTab = "Favourites"); BuildQuick(); };
+        RecentTab.Checked += (_, _) => { _config.Update(c => c.Ui.MiniTab = "Recent"); BuildQuick(); };
+        foreach (var name in ProfileService.Names) ProfileBox.Items.Add(name);
+        ProfileBox.SelectedItem = _sb.ActiveProfile;
+        ProfileBox.SelectionChanged += async (_, _) =>
+        {
+            if (ProfileBox.SelectedItem is string name && name != _sb.ActiveProfile) await _sb.SwitchProfileAsync(name);
+        };
+
+        Action rebuild = () => { BuildQuick(); Refresh(); };
+        Action profile = () => ProfileBox.SelectedItem = _sb.ActiveProfile;
         _sb.MixChanged += Refresh;
-        _sb.LibraryChanged += Refresh;
+        _sb.LibraryChanged += rebuild;
         _sb.PlaybackTick += Refresh;
         _sb.EngineChanged += Refresh;
+        _sb.ProfileChanged += profile;
         Closed += (_, _) =>
         {
-            _sb.LibraryChanged -= Refresh;
+            _sb.LibraryChanged -= rebuild;
             _sb.PlaybackTick -= Refresh;
             _sb.EngineChanged -= Refresh;
             _sb.MixChanged -= Refresh;
+            _sb.ProfileChanged -= profile;
         };
+        BuildQuick();
         Refresh();
     }
 
@@ -142,6 +158,40 @@ public partial class MiniPlayerWindow : Window
         EngineDot.ToolTip = _sb.EngineSummary;
     }
 
+    /// <summary>40–100 % (the window is layered so the game behind shows through).</summary>
+    public void SetOpacity(int percent) => Opacity = Math.Clamp(percent, 40, 100) / 100.0;
+
+    /// <summary>Up to 8 favourites or recently played sounds as one-click buttons.</summary>
+    private void BuildQuick()
+    {
+        Quick.Children.Clear();
+        var recent = RecentTab.IsChecked == true;
+        IEnumerable<SoundItem> list = recent
+            ? _sb.Config.Recent.Select(_sb.Get).OfType<SoundItem>()
+            : _sb.Items.Where(i => i.Favorite);
+        foreach (var item in list.Take(8))
+        {
+            var b = new System.Windows.Controls.Button
+            {
+                Style = (Style)FindResource("SoftButton"),
+                Content = new System.Windows.Controls.TextBlock { Text = item.Name, TextTrimming = TextTrimming.CharacterEllipsis, MaxWidth = 110 },
+                Height = 36,
+                Margin = new Thickness(0, 0, 6, 6),
+                Padding = new Thickness(10, 0, 10, 0),
+                ToolTip = item.HasShortcut ? $"{item.Name} ({item.Shortcut})" : item.Name,
+                IsEnabled = item.State == SoundState.Ready,
+            };
+            System.Windows.Automation.AutomationProperties.SetName(b, $"Play {item.Name}");
+            var id = item.Id;
+            b.PreviewMouseLeftButtonDown += (_, e) => { _selectedId = id; _sb.Press(id); e.Handled = true; Refresh(); };
+            b.PreviewMouseLeftButtonUp += (_, _) => _sb.Release(id);
+            b.Click += (_, _) => { _sb.Press(id); _sb.Release(id); }; // keyboard / screen reader
+            Quick.Children.Add(b);
+        }
+        QuickEmpty.Text = Quick.Children.Count > 0 ? "" : recent ? "Sounds you play appear here." : "Star sounds (right-click → Add to favourites) to pin them here.";
+        QuickEmpty.Visibility = Quick.Children.Count > 0 ? Visibility.Collapsed : Visibility.Visible;
+    }
+
     public bool IsCollapsed => Body.Visibility != Visibility.Visible;
 
     public void SetTopmost(bool on)
@@ -167,7 +217,7 @@ public partial class MiniPlayerWindow : Window
             SizeToContent = SizeToContent.Manual;
             Body.Visibility = Visibility.Visible;
             MinHeight = 300;
-            Height = Math.Max(300, _expandedHeight);
+            Height = Math.Max(480, _expandedHeight);
             CollapseButton.Content = "";
             CollapseButton.ToolTip = "Collapse";
         }

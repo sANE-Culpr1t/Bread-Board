@@ -12,6 +12,8 @@ public sealed class SoundItem(string id) : INotifyPropertyChanged
 {
     private string _name = "", _category = "", _shortcut = "", _icon = "volume", _tint = "beige";
     private PlayMode _mode;
+    private SoundRoute _route;
+    private int _sequenceCount;
     private int _volume;
     private bool _favorite, _playing;
     private double _progress;
@@ -26,6 +28,11 @@ public sealed class SoundItem(string id) : INotifyPropertyChanged
     public bool HasShortcut => _shortcut.Length > 0;
     public PlayMode Mode { get => _mode; private set => Set(ref _mode, value, [nameof(ModeText), nameof(ModeGlyph), nameof(StatusText)]); }
     public int Volume { get => _volume; private set => Set(ref _volume, value); }
+    public SoundRoute Route { get => _route; private set => Set(ref _route, value, [nameof(StatusText), nameof(RouteText)]); }
+    /// <summary>Number of sounds in a sequence; 0 for a normal sound.</summary>
+    public int SequenceCount { get => _sequenceCount; private set => Set(ref _sequenceCount, value, [nameof(IsSequence), nameof(StatusText)]); }
+    public bool IsSequence => _sequenceCount > 0;
+    public string RouteText => RouteLabel(_route);
     public bool Favorite { get => _favorite; private set => Set(ref _favorite, value); }
     public string IconKey { get => _icon; private set => Set(ref _icon, value, [nameof(Glyph)]); }
     public string TintKey { get => _tint; private set => Set(ref _tint, value, [nameof(TintBrush)]); }
@@ -56,7 +63,19 @@ public sealed class SoundItem(string id) : INotifyPropertyChanged
         SoundState.Loading => "Loading…",
         SoundState.Missing => "Missing",
         SoundState.Failed => "Error",
-        _ => _playing ? "Playing" : _mode == PlayMode.OneShot ? "" : ModeText,
+        _ => _playing ? "Playing" : string.Join(" · ", new[]
+        {
+            _sequenceCount > 0 ? $"{_sequenceCount} sounds" : null,
+            _mode == PlayMode.OneShot ? null : ModeText,
+            _route == SoundRoute.Both ? null : _route == SoundRoute.MicOnly ? "Mic only" : "Headphones only",
+        }.Where(s => s is not null)),
+    };
+
+    public static string RouteLabel(SoundRoute r) => r switch
+    {
+        SoundRoute.MicOnly => "Virtual mic only (you don't hear it)",
+        SoundRoute.MonitorOnly => "Headphones only (private preview)",
+        _ => "Virtual mic and headphones",
     };
 
     public static string ModeLabel(PlayMode m) => m switch
@@ -78,6 +97,8 @@ public sealed class SoundItem(string id) : INotifyPropertyChanged
         Favorite = e.Favorite;
         IconKey = e.Icon;
         TintKey = e.Tint;
+        Route = e.Route;
+        SequenceCount = e.Sequence?.Count ?? 0;
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;

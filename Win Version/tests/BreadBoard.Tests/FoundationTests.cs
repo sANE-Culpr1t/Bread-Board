@@ -122,6 +122,20 @@ public sealed class AppLifecycleTests : IDisposable
         }
         Assert.True(sound.GetProperty("removed").GetBoolean());
 
+        // Sequence, random, per-sound route and profile round trip.
+        var g = first.GetProperty("gaming");
+        Assert.Equal("Ready", g.GetProperty("sequenceState").GetString());
+        Assert.InRange(g.GetProperty("sequenceMs").GetDouble(), 2100, 2200); // 2 × 1 s + 150 ms gap
+        Assert.True(g.GetProperty("randomPicked").GetBoolean());
+        if (sound.GetProperty("engineOk").GetBoolean()) Assert.True(g.GetProperty("randomPlayed").GetBoolean());
+        Assert.Equal("General use", g.GetProperty("profileBefore").GetString());
+        Assert.Equal(JsonValueKind.Null, g.GetProperty("gamingHotkey").ValueKind); // Gaming never had that shortcut
+        Assert.Equal("Both", g.GetProperty("gamingRoute").GetString());
+        Assert.Equal("Ctrl+Alt+Shift+F23", g.GetProperty("backHotkey").GetString());
+        Assert.Equal("MonitorOnly", g.GetProperty("backRoute").GetString());
+        Assert.True(g.GetProperty("seqGone").GetBoolean());
+        Assert.Equal(4, g.GetProperty("profileCount").GetInt32());
+
         var log = string.Join('\n', Directory.GetFiles(Path.Combine(_dir, "Logs"), "*.jsonl").Select(File.ReadAllText));
         Assert.Contains("Shutdown complete", log);
         Assert.DoesNotContain("\"lvl\":\"error\"", log);

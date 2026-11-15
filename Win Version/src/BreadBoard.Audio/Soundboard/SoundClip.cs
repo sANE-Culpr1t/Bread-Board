@@ -69,3 +69,24 @@ public static class SoundLoader
         public int Read(Span<float> buffer) => reader.ReadSamples(buffer);
     }
 }
+
+/// <summary>Joins sounds into one clip (a "sequence"), each at its own volume, with a short gap between them.</summary>
+public static class SequenceBuilder
+{
+    public static SoundClip Build(string id, IReadOnlyList<(SoundClip Clip, float Volume)> parts, int gapMs = 150)
+    {
+        var gap = AudioFormat.SamplesFor(gapMs);
+        var total = parts.Sum(p => p.Clip.Samples.Length) + gap * Math.Max(0, parts.Count - 1);
+        var max = (int)(SoundLoader.MaxLength.TotalSeconds * AudioFormat.SampleRate * AudioFormat.Channels);
+        var data = new float[Math.Min(total, max)];
+        var pos = 0;
+        for (var i = 0; i < parts.Count && pos < data.Length; i++)
+        {
+            var (clip, vol) = parts[i];
+            var n = Math.Min(clip.Samples.Length, data.Length - pos);
+            for (var k = 0; k < n; k++) data[pos + k] = clip.Samples[k] * vol;
+            pos += n + gap;
+        }
+        return new SoundClip(id, data);
+    }
+}

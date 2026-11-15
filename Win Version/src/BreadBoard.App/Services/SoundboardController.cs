@@ -18,7 +18,7 @@ using BreadBoard.Core.Sounds;
 namespace BreadBoard.App.Services;
 
 /// <summary>Values the sound editor saves in one go.</summary>
-public sealed record SoundEdit(string Name, string Category, string? Hotkey, PlayMode Mode, int Volume, bool Favorite, string Icon, string Tint);
+public sealed record SoundEdit(string Name, string Category, string? Hotkey, PlayMode Mode, int Volume, bool Favorite, string Icon, string Tint, SoundRoute Route = SoundRoute.Both);
 
 /// <summary>Registration result for one shortcut owner ("sound:&lt;id&gt;", "global:stopAll", …).</summary>
 public sealed record HotkeyState(string OwnerKey, string Label, string? Combo, string? Error, bool Pending = false);
@@ -77,6 +77,7 @@ public sealed partial class SoundboardController : IDisposable
     /// <summary>Called after the first frame: shortcuts first (cheap), then audio if there are sounds.</summary>
     public async Task InitializeAsync()
     {
+        _host.Config.Update(ProfileService.EnsureDefaults);
         await RegisterHotkeysAsync();
         if (Items.Count > 0 || Config.Devices.AppSource is not null || Config.Devices.MicEnabled) await EnsureEngineAsync();
     }
@@ -100,7 +101,9 @@ public sealed partial class SoundboardController : IDisposable
             Notice?.Invoke($"The audio engine couldn't start: {Friendly(ex)}", true);
         }
         UpdateEngineSummary();
-        foreach (var item in Items.ToList()) await LoadAsync(item);
+        // Files first, then sequences (they are built from the loaded files).
+        foreach (var item in Items.Where(i => !i.IsSequence).ToList()) await LoadAsync(item);
+        foreach (var item in Items.Where(i => i.IsSequence).ToList()) await LoadAsync(item);
     }
 
     /// <summary>A snapshot of the settings for the engine (it reads them on its own threads).</summary>
@@ -153,6 +156,7 @@ public sealed partial class SoundboardController : IDisposable
     private async Task LoadAsync(SoundItem item)
     {
         if (Library.Find(item.Id) is not { } entry) return;
+        if (entry.Sequence is not null) { LoadSequence(item, entry); return; }
         if (SoundLibrary.FileMissing(entry))
         {
             item.State = SoundState.Missing;
@@ -339,10 +343,15 @@ public sealed partial class SoundboardController : IDisposable
             s.Favorite = edit.Favorite;
             s.Icon = edit.Icon;
             s.Tint = edit.Tint;
+            s.Route = edit.Route;
         });
         var entry = Library.Find(id)!;
         _byId[id].Apply(entry);
-        if (EngineStarted) _host.Audio.Soundboard.Update(id, entry.Mode, entry.Volume);
+        if (EngineStarted)
+        {
+            _host.Audio.Soundboard.Update(id, entry.Mode, entry.Volume, entry.Route);
+            RebuildSequencesUsing(id); // its volume is baked into sequences that contain it
+        }
         LibraryChanged?.Invoke();
         await RegisterHotkeysAsync();
         if (_hotkeys.GetValueOrDefault($"sound:{id}") is { Error: { } err, Combo: { } combo })
@@ -361,7 +370,13 @@ public sealed partial class SoundboardController : IDisposable
         if (EngineStarted) _host.Audio.Soundboard.Unregister(id);
         var hadHotkey = Library.Find(id)?.Hotkey is not null;
         Library.Remove(id);
-        if (_byId.Remove(id, out var item)) Items.Remove(item);
+        // Removing a sound can also remove sequences that no longer have two sounds.
+        foreach (var gone in _byId.Keys.Where(k => Library.Find(k) is null).ToList())
+        {
+            if (EngineStarted) _host.Audio.Soundboard.Unregister(gone);
+            if (_byId.Remove(gone, out var item)) Items.Remove(item);
+        }
+        if (EngineStarted) RebuildSequencesUsing(id);
         LibraryChanged?.Invoke();
         if (hadHotkey) _ = RegisterHotkeysAsync();
     }
@@ -457,6 +472,7 @@ public sealed partial class SoundboardController : IDisposable
         await Add("global:stopAll", "Stop all sounds", cfg.Hotkeys.StopAll, () => _ui.BeginInvoke(StopAll));
         await Add("global:toggleMini", "Toggle mini-player", cfg.Hotkeys.ToggleMini, () => _ui.BeginInvoke(() => ToggleMiniRequested?.Invoke()));
         await Add("global:muteMic", "Mute microphone", cfg.Hotkeys.MuteMic, () => _ui.BeginInvoke(ToggleMicMute));
+        await Add("global:random", "Play a random sound", cfg.Hotkeys.RandomSound, () => _ui.BeginInvoke(() => PlayRandom()));
         ApplyPushToTalkWatch(cfg);
 
         foreach (var item in _byId.Values) item.HotkeyError = _hotkeys.GetValueOrDefault($"sound:{item.Id}")?.Error;
@@ -467,7 +483,7 @@ public sealed partial class SoundboardController : IDisposable
     public Task SetSoundHotkeyAsync(string id, string? combo)
     {
         var e = Library.Find(id) ?? throw new KeyNotFoundException(id);
-        return SaveAsync(id, new SoundEdit(e.Name, e.Category, combo, e.Mode, e.Volume, e.Favorite, e.Icon, e.Tint));
+        return SaveAsync(id, new SoundEdit(e.Name, e.Category, combo, e.Mode, e.Volume, e.Favorite, e.Icon, e.Tint, e.Route));
     }
 
     /// <summary>Changes a global shortcut (Stop all / Toggle mini-player).</summary>
@@ -480,6 +496,7 @@ public sealed partial class SoundboardController : IDisposable
                 case "global:stopAll": c.Hotkeys.StopAll = combo; break;
                 case "global:toggleMini": c.Hotkeys.ToggleMini = combo; break;
                 case "global:muteMic": c.Hotkeys.MuteMic = combo; break;
+                case "global:random": c.Hotkeys.RandomSound = combo; break;
                 case "global:ptt": c.Processing.PushToTalk.Key = combo; break;
                 default: throw new ArgumentOutOfRangeException(nameof(ownerKey));
             }

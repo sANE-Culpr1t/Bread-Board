@@ -24,7 +24,7 @@ public sealed class MixerEngine : ISampleProvider
     private static readonly int TargetLatency = AudioFormat.SamplesFor(40);
     private static readonly int MaxLatency = AudioFormat.SamplesFor(120);
 
-    private float[] _mic = [], _app = [], _sb = [], _mon = [];
+    private float[] _mic = [], _app = [], _sb = [], _sbMon = [], _mon = [];
     private volatile CaptureSource? _micSource, _appSource;
     private volatile FloatRingBuffer? _monitorOut;
     private volatile bool _pttEnabled, _pttDown;
@@ -37,6 +37,8 @@ public sealed class MixerEngine : ISampleProvider
     public ChannelStrip Mic { get; } = new();
     public ChannelStrip App { get; } = new();
     public ChannelStrip Board { get; } = new();
+    /// <summary>Soundboard gain applied to the headphones bus (mirrors <see cref="Board"/>; sounds routed "headphones only" meter here).</summary>
+    public ChannelStrip BoardMonitor { get; } = new();
     public ChannelStrip Master { get; } = new();
     public ChannelRouting MicRouting { get; } = new() { ToMain = true };
     public ChannelRouting AppRouting { get; } = new() { ToMain = true };
@@ -63,14 +65,15 @@ public sealed class MixerEngine : ISampleProvider
     {
         var output = buffer;
         var count = output.Length;
-        Ensure(ref _mic, count); Ensure(ref _app, count); Ensure(ref _sb, count); Ensure(ref _mon, count);
+        Ensure(ref _mic, count); Ensure(ref _app, count); Ensure(ref _sb, count); Ensure(ref _sbMon, count); Ensure(ref _mon, count);
         var mic = _mic.AsSpan(0, count);
         var app = _app.AsSpan(0, count);
         var sb = _sb.AsSpan(0, count);
+        var sbMon = _sbMon.AsSpan(0, count);
 
         Pull(_micSource, mic);
         Pull(_appSource, app);
-        Soundboard.Render(sb);
+        Soundboard.Render(sb, sbMon);
 
         // Microphone chain: gate → push-to-talk → compressor → fader.
         Gate.Process(mic);
@@ -81,6 +84,7 @@ public sealed class MixerEngine : ISampleProvider
         AppDucker.Process(app, mic);
         App.Process(app);
         Board.Process(sb);
+        BoardMonitor.Process(sbMon);
 
         output.Clear();
         if (MicRouting.ToMain) Add(output, mic);
@@ -95,7 +99,7 @@ public sealed class MixerEngine : ISampleProvider
             m.Clear();
             if (MicRouting.ToMonitor) Add(m, mic);
             if (AppRouting.ToMonitor) Add(m, app);
-            if (BoardRouting.ToMonitor) Add(m, sb);
+            if (BoardRouting.ToMonitor) Add(m, sbMon);
             for (var i = 0; i < m.Length; i++) m[i] = Math.Clamp(m[i], -1f, 1f);
             if (mon.Count > MaxLatency) mon.Skip(mon.Count - TargetLatency);
             mon.Write(m);

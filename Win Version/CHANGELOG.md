@@ -1,5 +1,39 @@
 # Changelog — Bread Board (Win Version)
 
+## Iteration 5 — Gaming Mode and Advanced Features (v0.5.0)
+
+### Added
+- **Per-sound routing** (Edit sound → "Plays on"): virtual mic and headphones, **virtual mic only**
+  (others hear it, you don't) or **headphones only** (private preview). The soundboard now renders two
+  buses; the Soundboard fader applies to both. Pads show "Mic only" / "Headphones only".
+- **Random sound**: Random button on the Soundboard (from the current view) and a global shortcut
+  (Ctrl+Shift+R, from favourites or all sounds). Listed and changeable on the Shortcuts page.
+- **Sequences**: Ctrl+click pads in the order they should play, right-click → "Make a sequence". Played as one
+  sound (each part at its own volume, 150 ms apart) with its own shortcut, mode, route and volume. Editing a
+  part updates the sequence; removing a part shrinks it; a sequence left with one sound is removed.
+- **Profiles** (General use, Gaming, Streaming, Custom): each keeps its own sound shortcuts and routes, global
+  shortcuts, mixer levels, voice processing, mic/virtual-mic/monitor switches and app choice. The sound library
+  is shared. Changes always go to the active profile and are kept when you switch. Switch in Settings →
+  Profiles or from the mini-player.
+- **Mini-player**: quick list of up to 8 Favourites or Recent sounds (one click plays), profile switcher,
+  and an opacity setting (40–100 %, Settings → Gaming Mode) so the game shows through.
+
+### Tests (92 passing)
+- Routing: each route reaches the right bus, routes change while playing, headphones-only sounds never reach
+  the virtual mic but are heard and metered.
+- Sequences: joining with volumes and gap, length cap; library naming, no nesting, shrinking and removal.
+- Profiles: defaults created once, switching keeps each profile's own settings both ways, no shared objects,
+  new sounds have no shortcut in profiles that never saw them, save/load round trip.
+- App launch: builds a real sequence (2.15 s from two 1 s sounds), random play picks and plays it, a
+  headphones-only route and shortcut are kept in their profile and absent from another, removing a part
+  dissolves the sequence.
+- Not yet done: the hands-on UI Automation pass for Random / mini-player / profile switching (postponed
+  while the PC was in use for gaming; the same paths are covered by the app-launch test).
+
+### Fixed
+- Screenshot mode only ever captures the `bb tone` test helper as App Audio (it had picked the first app
+  playing sound, which can be a voice-chat app).
+
 ## Iteration 4 — Mixer and Virtual Microphone (v0.5.0)
 
 ### Added

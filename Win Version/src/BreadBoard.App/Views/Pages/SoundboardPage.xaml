@@ -89,6 +89,8 @@
 
         <DockPanel Grid.Row="0">
             <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                <Button x:Name="RandomButton" Style="{StaticResource SoftButton}" t:Ui.Icon="&#xE8B1;" Content="Random" Margin="0,0,10,0"
+                        ToolTip="Play a random sound from this view (Ctrl+Shift+R plays a random favourite from anywhere)"/>
                 <Button x:Name="StopAllButton" Style="{StaticResource SoftButton}" t:Ui.Icon="{x:Static t:Glyph.Stop}" Content="Stop all" Margin="0,0,10,0"
                         ToolTip="Stop every sound that is playing"/>
                 <Button x:Name="AddButton" Style="{StaticResource PrimaryButton}" t:Ui.Icon="{x:Static t:Glyph.Add}" Content="Add Sound"
@@ -105,7 +107,7 @@
         <Grid Grid.Row="2" Margin="0,8,0,0">
             <ListBox x:Name="Pads" ItemTemplate="{StaticResource PadTemplate}" ItemContainerStyle="{StaticResource PadItem}"
                      Background="Transparent" BorderThickness="0" Padding="0,4,4,8" Foreground="{StaticResource InkBrush}"
-                     ScrollViewer.HorizontalScrollBarVisibility="Disabled" VirtualizingPanel.IsVirtualizing="False"
+                     ScrollViewer.HorizontalScrollBarVisibility="Disabled" VirtualizingPanel.IsVirtualizing="False" SelectionMode="Extended"
                      AutomationProperties.Name="Sound pads">
                 <ListBox.ItemsPanel>
                     <ItemsPanelTemplate><c:AdaptiveGrid MinItemWidth="172" ItemHeight="140" Spacing="16"/></ItemsPanelTemplate>

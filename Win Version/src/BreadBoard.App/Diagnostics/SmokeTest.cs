@@ -42,10 +42,12 @@ public static class SmokeTest
         main.MiniPlayer?.Close();
 
         var sound = await SoundScenarioAsync(host).ConfigureAwait(true);
+        var gaming = await GamingScenarioAsync(host).ConfigureAwait(true);
 
         var result = new
         {
             sound,
+            gaming,
             audioAtStart,
             startupMs = Math.Round(startupMs),
             startPage = startPage.ToString(),
@@ -95,6 +97,49 @@ public static class SmokeTest
             progressed,
             stopped,
             removed = sb.Items.Count == 0 && file is not null && !File.Exists(file),
+        };
+    }
+
+    /// <summary>Sequence of two sounds, random play, per-sound route, profile switch round trip.</summary>
+    private static async Task<object> GamingScenarioAsync(AppHost host)
+    {
+        var sb = host.Soundboard;
+        var a = WriteTone(Path.Combine(AppPaths.Roaming, "smoke-a.wav"));
+        var b = WriteTone(Path.Combine(AppPaths.Roaming, "smoke-b.wav"));
+        var added = await sb.ImportFilesAsync([a, b], "Smoke").ConfigureAwait(true);
+        if (added.Count != 2) return new { imported = added.Count };
+        var seq = await sb.AddSequenceAsync([added[0].Id, added[1].Id]).ConfigureAwait(true);
+        var seqMs = seq?.Duration?.TotalMilliseconds;
+
+        // Route one sound to headphones only and give it a shortcut in this profile.
+        var e = sb.Library.Find(added[0].Id)!;
+        await sb.SaveAsync(e.Id, new Services.SoundEdit(e.Name, e.Category, "Ctrl+Alt+Shift+F23", e.Mode, 5, e.Favorite, e.Icon, e.Tint, Core.Models.SoundRoute.MonitorOnly)).ConfigureAwait(true);
+        var random = sb.PlayRandom([seq!]);
+        var randomPlayed = await WaitAsync(() => seq!.Playing, 1500).ConfigureAwait(true);
+        sb.StopAll();
+
+        var before = sb.ActiveProfile;
+        await sb.SwitchProfileAsync("Gaming").ConfigureAwait(true);
+        var inGaming = (hotkey: sb.Library.Find(e.Id)!.Hotkey, route: sb.Library.Find(e.Id)!.Route.ToString());
+        await sb.SwitchProfileAsync(before).ConfigureAwait(true);
+        var back = (hotkey: sb.Library.Find(e.Id)!.Hotkey, route: sb.Library.Find(e.Id)!.Route.ToString());
+
+        sb.Remove(added[1].Id); // sequence of one is dissolved
+        var seqGone = sb.Get(seq!.Id) is null;
+        sb.Remove(added[0].Id);
+        return new
+        {
+            sequenceMs = seqMs,
+            sequenceState = seq.State.ToString(),
+            randomPicked = random?.Id == seq.Id,
+            randomPlayed,
+            profileBefore = before,
+            gamingHotkey = inGaming.hotkey,
+            gamingRoute = inGaming.route,
+            backHotkey = back.hotkey,
+            backRoute = back.route,
+            seqGone,
+            profileCount = sb.Config.Profiles.Count,
         };
     }
 

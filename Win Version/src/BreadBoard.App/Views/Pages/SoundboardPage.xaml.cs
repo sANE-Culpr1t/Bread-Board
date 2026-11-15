@@ -26,6 +26,7 @@ public partial class SoundboardPage : UserControl
     private string _query = "";
     private string _filter = All;
     private SoundItem? _pressed;
+    private readonly List<SoundItem> _selectionOrder = [];
 
     public SoundboardPage(SoundboardController sb)
     {
@@ -37,10 +38,18 @@ public partial class SoundboardPage : UserControl
 
         AddButton.Click += (_, _) => SoundEditorDialog.Add(_sb);
         StopAllButton.Click += (_, _) => _sb.StopAll();
+        RandomButton.Click += (_, _) => _sb.PlayRandom(_view.Cast<SoundItem>().ToList());
+        Pads.SelectionChanged += (_, e) =>
+        {
+            foreach (SoundItem r in e.RemovedItems) _selectionOrder.Remove(r);
+            foreach (SoundItem a in e.AddedItems) if (!_selectionOrder.Contains(a)) _selectionOrder.Add(a);
+        };
 
         Pads.PreviewMouseLeftButtonDown += (s, e) =>
         {
             if (ItemAt(e.OriginalSource) is not { } item) return;
+            // Ctrl/Shift+click selects several pads (e.g. to make a sequence) instead of playing.
+            if ((Keyboard.Modifiers & (ModifierKeys.Control | ModifierKeys.Shift)) != 0) return;
             Pads.SelectedItem = item;
             Pads.Focus();
             if (item.IsMissing) { Locate(item); e.Handled = true; return; }
@@ -63,7 +72,7 @@ public partial class SoundboardPage : UserControl
         Pads.PreviewMouseRightButtonUp += (_, e) =>
         {
             if (ItemAt(e.OriginalSource) is not { } item) return;
-            Pads.SelectedItem = item;
+            if (!Pads.SelectedItems.Contains(item)) Pads.SelectedItem = item;
             OpenMenu(item);
             e.Handled = true;
         };
@@ -198,6 +207,11 @@ public partial class SoundboardPage : UserControl
             () => { if (item.Playing) _sb.Stop(item.Id); else { _sb.Press(item.Id); _sb.Release(item.Id); } },
             enabled: item.State == SoundState.Ready);
         Item("Edit…", "", () => SoundEditorDialog.Edit(_sb, item.Id));
+        var chosen = _selectionOrder.Where(i => Pads.SelectedItems.Contains(i) && !i.IsSequence).ToList();
+        if (chosen.Count >= 2)
+            Item($"Make a sequence of {chosen.Count} sounds", "", () => _ = _sb.AddSequenceAsync([.. chosen.Select(i => i.Id)]));
+        else
+            Item("Make a sequence…", "", () => _sb.RaiseNotice("Ctrl+click two or more pads in the order they should play, then right-click one of them.", false));
         Item(item.Favorite ? "Remove from favourites" : "Add to favourites", item.Favorite ? Glyph.Star : Glyph.StarFill, () => _sb.ToggleFavorite(item.Id));
         if (_sb.Library.Find(item.Id) is { } entry && File.Exists(entry.FilePath))
             Item("Show file in folder", "", () => System.Diagnostics.Process.Start("explorer.exe", $"/select,\"{entry.FilePath}\""));

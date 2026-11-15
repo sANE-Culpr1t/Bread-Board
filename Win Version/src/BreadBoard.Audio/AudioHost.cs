@@ -75,6 +75,8 @@ public sealed class AudioHost : IAsyncDisposable
         Apply(Mixer.Mic, Mixer.MicRouting, c.Channels.Mic);
         Apply(Mixer.App, Mixer.AppRouting, c.Channels.App);
         Apply(Mixer.Board, Mixer.BoardRouting, c.Channels.Soundboard);
+        Mixer.BoardMonitor.Gain = c.Channels.Soundboard.Gain / 100f;
+        Mixer.BoardMonitor.Muted = c.Channels.Soundboard.Muted;
         Apply(Mixer.Master, Mixer.MasterRouting, c.Channels.Master);
         Mixer.MasterRouting.ToMain = c.Devices.VirtualMicEnabled;
 
@@ -108,7 +110,7 @@ public sealed class AudioHost : IAsyncDisposable
     public Task<SoundClip> LoadSoundAsync(SoundEntry s) => Task.Run(() =>
     {
         var clip = SoundLoader.Load(s.Id, s.FilePath);
-        Soundboard.Register(s.Id, clip, s.Mode, s.Volume);
+        Soundboard.Register(s.Id, clip, s.Mode, s.Volume, s.Route);
         return clip;
     });
 

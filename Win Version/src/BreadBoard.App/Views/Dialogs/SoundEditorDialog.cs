@@ -26,6 +26,7 @@ public sealed class SoundEditorDialog : DialogWindow
     private readonly TextBox _name = new() { MaxLength = SoundLibrary.MaxNameLength };
     private readonly ComboBox _category = new() { IsEditable = true };
     private readonly ComboBox _mode = new();
+    private readonly ComboBox _route = new();
     private readonly HotkeyBox _hotkey = new();
     private readonly Slider _volume = new() { Minimum = 0, Maximum = 100, IsSnapToTickEnabled = true, TickFrequency = 1 };
     private readonly CheckBox _favorite;
@@ -78,6 +79,11 @@ public sealed class SoundEditorDialog : DialogWindow
         Grid.SetColumn(modeField, 2);
         two.Children.Add(modeField);
         body.Children.Add(two);
+
+        foreach (var r in Enum.GetValues<SoundRoute>()) _route.Items.Add(new ComboBoxItem { Content = SoundItem.RouteLabel(r), Tag = r });
+        _route.SelectedIndex = (int)(entry?.Route ?? SoundRoute.Both);
+        System.Windows.Automation.AutomationProperties.SetName(_route, "Plays on");
+        body.Children.Add(Field("Plays on", _route, "“Virtual mic only” plays for others without you hearing it; “Headphones only” lets you preview privately."));
 
         _hotkey.Combo = entry?.Hotkey;
         _hotkey.ComboChanged += _ => ValidateHotkey();
@@ -257,7 +263,7 @@ public sealed class SoundEditorDialog : DialogWindow
         var name = _name.Text.Trim();
         var category = _category.Text.Trim();
         var edit = new SoundEdit(name, category.Length == 0 ? "General" : category, _hotkey.Combo, SelectedMode,
-            (int)_volume.Value, _favorite.IsChecked == true, _icon, _tint);
+            (int)_volume.Value, _favorite.IsChecked == true, _icon, _tint, (SoundRoute)((ComboBoxItem)_route.SelectedItem).Tag);
 
         if (_entry is not null)
         {

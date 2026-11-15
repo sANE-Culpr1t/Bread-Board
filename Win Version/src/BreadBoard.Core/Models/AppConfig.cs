@@ -3,6 +3,9 @@ namespace BreadBoard.Core.Models;
 /// <summary>OneShot stacks a new voice per press; Loop/Toggle stop on the next press; Hold plays while held.</summary>
 public enum PlayMode { OneShot, Toggle, Loop, Hold }
 
+/// <summary>Where a sound plays: virtual mic and your headphones, only the virtual mic (others hear it, you don't), or only your headphones (a private preview).</summary>
+public enum SoundRoute { Both, MicOnly, MonitorOnly }
+
 public sealed class SoundEntry
 {
     public string Id { get; set; } = Guid.NewGuid().ToString("N");
@@ -18,6 +21,9 @@ public sealed class SoundEntry
     public bool Favorite { get; set; }
     public string Icon { get; set; } = "volume";
     public string Tint { get; set; } = "beige";
+    public SoundRoute Route { get; set; } = SoundRoute.Both;
+    /// <summary>For a sequence: the sounds it plays one after another (no file of its own).</summary>
+    public List<string>? Sequence { get; set; }
 }
 
 public sealed class ChannelSettings
@@ -102,6 +108,7 @@ public sealed class GlobalHotkeys
 {
     public string? StopAll { get; set; } = "Ctrl+Shift+S";
     public string? MuteMic { get; set; } = "Ctrl+Shift+M";
+    public string? RandomSound { get; set; } = "Ctrl+Shift+R";
     public string? ToggleMini { get; set; } = "Ctrl+Shift+G";
 }
 
@@ -124,9 +131,13 @@ public sealed class UiSettings
     public double? MiniLeft { get; set; }
     public double? MiniTop { get; set; }
     public double MiniWidth { get; set; } = 320;
-    public double MiniHeight { get; set; } = 420;
+    public double MiniHeight { get; set; } = 600;
     public bool MiniTopmost { get; set; } = true;
     public bool MiniOpenOnStart { get; set; }
+    /// <summary>Mini-player opacity, 40–100 %.</summary>
+    public int MiniOpacity { get; set; } = 100;
+    /// <summary>Mini-player quick list: "Favourites" or "Recent".</summary>
+    public string MiniTab { get; set; } = "Favourites";
 }
 
 public sealed class AppConfig
@@ -144,4 +155,6 @@ public sealed class AppConfig
     public PlaybackSettings Playback { get; set; } = new();
     public GlobalHotkeys Hotkeys { get; set; } = new();
     public List<SoundSite> SoundSites { get; set; } = [new() { Name = "Myinstants", Url = "https://www.myinstants.com/" }];
+    public List<Profile> Profiles { get; set; } = [];
+    public string ActiveProfile { get; set; } = "General use";
 }

@@ -23,7 +23,29 @@ public sealed class SoundLibrary(ConfigService config, string libraryDir)
 
     public SoundEntry? Find(string id) => config.Current.Sounds.Find(s => s.Id == id);
 
-    public static bool FileMissing(SoundEntry s) => !File.Exists(s.FilePath);
+    public static bool FileMissing(SoundEntry s) => s.Sequence is null && !File.Exists(s.FilePath);
+
+    /// <summary>Adds a sequence that plays <paramref name="memberIds"/> one after another.</summary>
+    public SoundEntry AddSequence(IReadOnlyList<string> memberIds, string? name = null)
+    {
+        if (memberIds.Count < 2) throw new ArgumentException("A sequence needs at least two sounds.", nameof(memberIds));
+        var members = memberIds.Select(id => Find(id) ?? throw new KeyNotFoundException(id)).ToList();
+        if (members.Exists(m => m.Sequence is not null)) throw new ArgumentException("Sequences can't contain other sequences.", nameof(memberIds));
+        var entry = new SoundEntry
+        {
+            Name = CleanName(name ?? string.Join(" → ", members.Select(m => m.Name))),
+            Category = members[0].Category,
+            Sequence = [.. memberIds],
+            Icon = "music",
+            Tint = "amber",
+        };
+        config.Update(c => c.Sounds.Add(entry));
+        return entry;
+    }
+
+    /// <summary>Sequences that include <paramref name="id"/>.</summary>
+    public IReadOnlyList<SoundEntry> SequencesUsing(string id) =>
+        config.Current.Sounds.Where(s => s.Sequence?.Contains(id) == true).ToList();
 
     /// <summary>Copies <paramref name="sourcePath"/> into the library and adds a sound for it.</summary>
     public SoundEntry Import(string sourcePath, string? name = null, string? category = null)
@@ -85,9 +107,11 @@ public sealed class SoundLibrary(ConfigService config, string libraryDir)
             if (removed is null) return;
             c.Sounds.Remove(removed);
             c.Recent.Remove(id);
+            foreach (var seq in c.Sounds.Where(s => s.Sequence is not null)) seq.Sequence!.RemoveAll(x => x == id);
+            c.Sounds.RemoveAll(s => s.Sequence is { Count: < 2 }); // a sequence of one isn't a sequence any more
         });
         if (removed is null) return false;
-        if (IsInLibrary(removed.FilePath) && File.Exists(removed.FilePath) && !config.Current.Sounds.Exists(s => s.FilePath == removed.FilePath))
+        if (removed.Sequence is null && IsInLibrary(removed.FilePath) && File.Exists(removed.FilePath) && !config.Current.Sounds.Exists(s => s.FilePath == removed.FilePath))
         {
             try { File.Delete(removed.FilePath); }
             catch (IOException) { } // still in use / locked — harmless leftover

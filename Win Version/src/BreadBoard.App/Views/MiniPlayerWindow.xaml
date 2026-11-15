@@ -3,8 +3,8 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:t="clr-namespace:BreadBoard.App.Theme"
         Title="Bread Board — Mini Player"
-        MinWidth="270" MinHeight="300"
-        Background="{StaticResource SidebarBrush}"
+        MinWidth="290" MinHeight="300"
+        AllowsTransparency="True" WindowStyle="None" Background="Transparent"
         Foreground="{StaticResource InkBrush}"
         FontFamily="{StaticResource UiFont}"
         FontSize="14"
@@ -15,6 +15,8 @@
         <WindowChrome CaptionHeight="0" ResizeBorderThickness="6" GlassFrameThickness="0" CornerRadius="0" UseAeroCaptionButtons="False"/>
     </WindowChrome.WindowChrome>
 
+    <!-- Layered window so the opacity setting can let the game show through. -->
+    <Border x:Name="Surface" Background="{StaticResource SidebarBrush}" CornerRadius="12" BorderBrush="{StaticResource LineBrush}" BorderThickness="1">
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
@@ -47,8 +49,10 @@
                 <RowDefinition Height="Auto"/>
                 <RowDefinition Height="Auto"/>
                 <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*" MinHeight="44"/>
                 <RowDefinition Height="Auto"/>
-                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
             </Grid.RowDefinitions>
 
             <!-- Transport: step through favourites (or all sounds) and play the selected one -->
@@ -68,19 +72,36 @@
             </StackPanel>
             <ProgressBar x:Name="NowProgress" Grid.Row="2" Style="{StaticResource Meter}" Maximum="1" Value="0" Margin="0,14,0,0" Foreground="{StaticResource AccentBrush}"/>
 
-            <Button x:Name="StopAllButton" Grid.Row="3" Style="{StaticResource SoftButton}" t:Ui.Icon="{x:Static t:Glyph.Stop}" Content="Stop all"
+            <!-- Quick list: favourites or recently played -->
+            <DockPanel Grid.Row="3" Margin="0,16,0,8">
+                <StackPanel Orientation="Horizontal">
+                    <RadioButton x:Name="FavTab" Style="{StaticResource Chip}" Content="Favourites" GroupName="minitab" AutomationProperties.Name="Favourites list"/>
+                    <RadioButton x:Name="RecentTab" Style="{StaticResource Chip}" Content="Recent" GroupName="minitab" AutomationProperties.Name="Recent list"/>
+                </StackPanel>
+            </DockPanel>
+            <ScrollViewer Grid.Row="4" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Focusable="False">
+                <StackPanel>
+                    <UniformGrid x:Name="Quick" Columns="2"/>
+                    <TextBlock x:Name="QuickEmpty" FontSize="12" Foreground="{StaticResource MuteBrush}" TextWrapping="Wrap" Margin="2,4,0,0"/>
+                </StackPanel>
+            </ScrollViewer>
+
+            <Button x:Name="StopAllButton" Grid.Row="5" Style="{StaticResource SoftButton}" t:Ui.Icon="{x:Static t:Glyph.Stop}" Content="Stop all"
                     Margin="0,16,0,0" HorizontalAlignment="Stretch" ToolTip="Stop every sound that is playing"/>
 
             <!-- Mic / master mute -->
-            <UniformGrid Grid.Row="4" Rows="1" Margin="0,10,0,0">
+            <UniformGrid Grid.Row="6" Rows="1" Margin="0,10,0,0">
                 <Button x:Name="MicButton" Style="{StaticResource SoftButton}" t:Ui.Icon="{x:Static t:Glyph.MicOff}" Content="Mic" Margin="0,0,6,0"
                         ToolTip="Mute or unmute your microphone" AutomationProperties.Name="Mute microphone"/>
                 <Button x:Name="MasterButton" Style="{StaticResource SoftButton}" t:Ui.Icon="{x:Static t:Glyph.Mute}" Content="Master" Margin="6,0,0,0"
                         ToolTip="Mute or unmute everything sent to the virtual mic" AutomationProperties.Name="Mute master output"/>
             </UniformGrid>
 
-            <TextBlock Grid.Row="5" VerticalAlignment="Bottom" HorizontalAlignment="Center" FontSize="11" Foreground="{StaticResource MuteBrush}"
-                       Text="Drag the header to move · drag an edge to resize"/>
+            <DockPanel Grid.Row="7" Margin="0,12,0,0">
+                <TextBlock Text="Profile" FontSize="12" Foreground="{StaticResource MuteBrush}" VerticalAlignment="Center" Margin="2,0,10,0"/>
+                <ComboBox x:Name="ProfileBox" Height="34" FontSize="13" AutomationProperties.Name="Profile"/>
+            </DockPanel>
         </Grid>
     </Grid>
+    </Border>
 </Window>

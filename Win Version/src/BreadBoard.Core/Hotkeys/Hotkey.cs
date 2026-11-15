@@ -73,6 +73,7 @@ public static class HotkeyRules
         if (Norm(cfg.Hotkeys.StopAll) is { } a) list.Add(new("global:stopAll", "Stop all sounds", a));
         if (Norm(cfg.Hotkeys.MuteMic) is { } b) list.Add(new("global:muteMic", "Mute microphone", b));
         if (Norm(cfg.Hotkeys.ToggleMini) is { } m) list.Add(new("global:toggleMini", "Toggle mini-player", m));
+        if (Norm(cfg.Hotkeys.RandomSound) is { } r) list.Add(new("global:random", "Play a random sound", r));
         if (Norm(cfg.Processing.PushToTalk.Key) is { } p) list.Add(new("global:ptt", "Push-to-talk", p));
         return list;
     }

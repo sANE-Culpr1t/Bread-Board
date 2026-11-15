@@ -15,6 +15,7 @@ public sealed class SoundboardEngine
         public readonly SoundClip Clip = clip;
         public volatile PlayMode Mode = mode;
         public volatile float Volume = volume;
+        public volatile SoundRoute Route;
         /// <summary>Sample position of the most recently rendered voice (written by the audio thread).</summary>
         public volatile int Position;
     }
@@ -43,8 +44,11 @@ public sealed class SoundboardEngine
     public IReadOnlyList<string> Playing => _playing;
     public event Action<IReadOnlyList<string>>? PlayingChanged;
 
-    public void Register(string id, SoundClip clip, PlayMode mode, int volumePercent) =>
-        _entries[id] = new Entry(clip, mode, volumePercent / 100f);
+    public void Register(string id, SoundClip clip, PlayMode mode, int volumePercent, SoundRoute route = SoundRoute.Both) =>
+        _entries[id] = new Entry(clip, mode, volumePercent / 100f) { Route = route };
+
+    /// <summary>The decoded clip of a registered sound (used to build sequences).</summary>
+    public SoundClip? GetClip(string id) => _entries.TryGetValue(id, out var e) ? e.Clip : null;
 
     public bool IsRegistered(string id) => _entries.ContainsKey(id);
 
@@ -52,11 +56,12 @@ public sealed class SoundboardEngine
     public double GetProgress(string id) =>
         _entries.TryGetValue(id, out var e) && e.Clip.Samples.Length > 0 ? (double)e.Position / e.Clip.Samples.Length : 0;
 
-    public void Update(string id, PlayMode mode, int volumePercent)
+    public void Update(string id, PlayMode mode, int volumePercent, SoundRoute route = SoundRoute.Both)
     {
         if (!_entries.TryGetValue(id, out var e)) return;
         e.Mode = mode;
         e.Volume = volumePercent / 100f;
+        e.Route = route;
     }
 
     public void Unregister(string id)
@@ -69,29 +74,49 @@ public sealed class SoundboardEngine
     public void Stop(string id) => _commands.Enqueue(new(CmdKind.Stop, id));
     public void StopAll() => _commands.Enqueue(new(CmdKind.StopAll, null));
 
-    /// <summary>Audio thread: mixes active voices into <paramref name="output"/> (overwrites it).</summary>
-    public void Render(Span<float> output)
+    /// <summary>Audio thread: mixes every active voice into <paramref name="output"/> (overwrites it), ignoring routing.</summary>
+    public void Render(Span<float> output) => Render(output, []);
+
+    /// <summary>
+    /// Audio thread: mixes voices into the virtual-mic bus (<paramref name="main"/>) and the headphones bus
+    /// (<paramref name="monitor"/>) according to each sound's route. Both are overwritten. With an empty
+    /// monitor span every voice goes to <paramref name="main"/>.
+    /// </summary>
+    public void Render(Span<float> main, Span<float> monitor)
     {
         var changed = ApplyCommands();
-        output.Clear();
+        main.Clear();
+        monitor.Clear();
+        var split = monitor.Length == main.Length;
         for (var v = 0; v < _voices.Count; v++) _voices[v].Entry.Position = _voices[v].Position; // oldest first, newest wins
         for (var v = _voices.Count - 1; v >= 0; v--)
         {
             var voice = _voices[v];
             var src = voice.Entry.Clip.Samples;
             var vol = voice.Entry.Volume;
+            var route = voice.Entry.Route;
+            var toMain = !split || route != SoundRoute.MonitorOnly;
+            var toMon = split && route != SoundRoute.MicOnly;
             var i = 0;
-            while (i < output.Length)
+            while (i < main.Length)
             {
                 if (voice.Position >= src.Length)
                 {
                     if (!voice.Loop || src.Length == 0) break;
                     voice.Position = 0;
                 }
-                var n = Math.Min(output.Length - i, src.Length - voice.Position);
+                var n = Math.Min(main.Length - i, src.Length - voice.Position);
                 var s = src.AsSpan(voice.Position, n);
-                var o = output.Slice(i, n);
-                for (var k = 0; k < n; k++) o[k] += s[k] * vol;
+                if (toMain)
+                {
+                    var o = main.Slice(i, n);
+                    for (var k = 0; k < n; k++) o[k] += s[k] * vol;
+                }
+                if (toMon)
+                {
+                    var m = monitor.Slice(i, n);
+                    for (var k = 0; k < n; k++) m[k] += s[k] * vol;
+                }
                 voice.Position += n;
                 i += n;
             }

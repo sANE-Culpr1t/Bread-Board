@@ -28,11 +28,10 @@ public sealed class SoundItem(string id) : INotifyPropertyChanged
     public bool HasShortcut => _shortcut.Length > 0;
     public PlayMode Mode { get => _mode; private set => Set(ref _mode, value, [nameof(ModeText), nameof(ModeGlyph), nameof(StatusText)]); }
     public int Volume { get => _volume; private set => Set(ref _volume, value); }
-    public SoundRoute Route { get => _route; private set => Set(ref _route, value, [nameof(StatusText), nameof(RouteText)]); }
+    public SoundRoute Route { get => _route; private set => Set(ref _route, value, [nameof(StatusText)]); }
     /// <summary>Number of sounds in a sequence; 0 for a normal sound.</summary>
     public int SequenceCount { get => _sequenceCount; private set => Set(ref _sequenceCount, value, [nameof(IsSequence), nameof(StatusText)]); }
     public bool IsSequence => _sequenceCount > 0;
-    public string RouteText => RouteLabel(_route);
     public bool Favorite { get => _favorite; private set => Set(ref _favorite, value); }
     public string IconKey { get => _icon; private set => Set(ref _icon, value, [nameof(Glyph)]); }
     public string TintKey { get => _tint; private set => Set(ref _tint, value, [nameof(TintBrush)]); }

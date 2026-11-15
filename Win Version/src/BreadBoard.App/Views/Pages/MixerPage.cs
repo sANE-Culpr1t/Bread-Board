@@ -65,9 +65,6 @@ public sealed class MixerPage : UserControl
 
     private static Brush Res(string key) => (Brush)Application.Current.FindResource(key);
 
-    /// <summary>Peak (linear) → 0–1 on a −60…0 dB scale, so quiet voices still move the meter.</summary>
-    public static double Db(float peak) => peak <= 1e-6f ? 0 : Math.Clamp((20 * Math.Log10(peak) + 60) / 60, 0, 1);
-
     // ---- channel strips -----------------------------------------------------------------
 
     private Border Strip(MixChannel ch, string title, string glyph, FrameworkElement slot)
@@ -154,7 +151,7 @@ public sealed class MixerPage : UserControl
             statusText.ToolTip = text;
             dot.Fill = Res(brush);
         });
-        _sb.PlaybackTick += () => meter.Value = Db(ch switch
+        _sb.PlaybackTick += () => meter.Value = Meter.Db(ch switch
         {
             MixChannel.Mic => _sb.MicLevel,
             MixChannel.App => _sb.AppLevel,

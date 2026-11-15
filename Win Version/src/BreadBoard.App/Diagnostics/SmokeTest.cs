@@ -154,15 +154,16 @@ public static class SmokeTest
         return true;
     }
 
-    /// <summary>One second of a quiet 440 Hz tone, 16-bit mono PCM.</summary>
-    private static string WriteTone(string path)
+    /// <summary>A quiet 440 Hz tone (amplitude 0 = silence), 16-bit mono PCM. Also used by the screenshot tour.</summary>
+    internal static string WriteTone(string path, double seconds = 1, int amplitude = 2000)
     {
         const int rate = 44100;
+        var n = (int)(rate * seconds);
         using var w = new BinaryWriter(File.Create(path));
-        w.Write("RIFF"u8); w.Write(36 + rate * 2); w.Write("WAVE"u8);
+        w.Write("RIFF"u8); w.Write(36 + n * 2); w.Write("WAVE"u8);
         w.Write("fmt "u8); w.Write(16); w.Write((short)1); w.Write((short)1); w.Write(rate); w.Write(rate * 2); w.Write((short)2); w.Write((short)16);
-        w.Write("data"u8); w.Write(rate * 2);
-        for (var i = 0; i < rate; i++) w.Write((short)(Math.Sin(2 * Math.PI * 440 * i / rate) * 2000));
+        w.Write("data"u8); w.Write(n * 2);
+        for (var i = 0; i < n; i++) w.Write((short)(Math.Sin(2 * Math.PI * 440 * i / rate) * amplitude));
         return path;
     }
 }

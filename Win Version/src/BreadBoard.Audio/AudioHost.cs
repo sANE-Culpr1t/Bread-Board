@@ -103,8 +103,6 @@ public sealed class AudioHost : IAsyncDisposable
         }
     }
 
-    /// <summary>Changes devices / app source and restarts only what changed.</summary>
-    public Task UpdateDevicesAsync(AppConfig config) => StartAsync(config);
 
     /// <summary>Decodes and registers a sound so it can be triggered. Runs on a worker thread.</summary>
     public Task<SoundClip> LoadSoundAsync(SoundEntry s) => Task.Run(() =>

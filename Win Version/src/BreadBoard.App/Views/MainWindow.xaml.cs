@@ -69,10 +69,10 @@ public partial class MainWindow : Window
         StateChanged += (_, _) => sb.MetersVisible = WindowState != WindowState.Minimized;
         sb.PlaybackTick += () =>
         {
-            BoardMeter.Value = MixerPage.Db(sb.SoundboardLevel);
-            AppMeter.Value = MixerPage.Db(sb.AppLevel);
-            MicMeter.Value = MixerPage.Db(sb.MicLevel);
-            MasterMeter.Value = MixerPage.Db(sb.MasterLevel);
+            BoardMeter.Value = Meter.Db(sb.SoundboardLevel);
+            AppMeter.Value = Meter.Db(sb.AppLevel);
+            MicMeter.Value = Meter.Db(sb.MicLevel);
+            MasterMeter.Value = Meter.Db(sb.MasterLevel);
         };
         sb.ToggleMiniRequested = () => { if (_mini is null) ShowMini(); else _mini.Close(); };
         Toast.MouseLeftButtonUp += (_, _) => HideToast();

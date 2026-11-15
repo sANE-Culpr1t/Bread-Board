@@ -92,7 +92,7 @@ public static class ScreenshotTour
         ];
         foreach (var s in seed)
         {
-            var wav = WriteSilence(Path.Combine(src, s.Name.Replace(' ', '_') + ".wav"), s.Secs);
+            var wav = SmokeTest.WriteTone(Path.Combine(src, s.Name.Replace(' ', '_') + ".wav"), s.Secs, amplitude: 0); // silent: screenshots make no noise
             if (await sb.ImportFilesAsync([wav], s.Cat).ConfigureAwait(true) is [var item, ..])
                 await sb.SaveAsync(item.Id, new Services.SoundEdit(s.Name, s.Cat, s.Key, s.Mode, 80, s.Fav, s.Icon, s.Tint, s.Name == "Applause" ? Core.Models.SoundRoute.MicOnly : Core.Models.SoundRoute.Both)).ConfigureAwait(true);
         }
@@ -103,18 +103,6 @@ public static class ScreenshotTour
         await Task.Delay(600).ConfigureAwait(true);
     }
 
-    /// <summary>Silent WAV (screenshots shouldn't make noise).</summary>
-    private static string WriteSilence(string path, double seconds)
-    {
-        const int rate = 48000;
-        var n = (int)(rate * seconds);
-        using var w = new BinaryWriter(File.Create(path));
-        w.Write("RIFF"u8); w.Write(36 + n * 2); w.Write("WAVE"u8);
-        w.Write("fmt "u8); w.Write(16); w.Write((short)1); w.Write((short)1); w.Write(rate); w.Write(rate * 2); w.Write((short)2); w.Write((short)16);
-        w.Write("data"u8); w.Write(n * 2);
-        w.Write(new byte[n * 2]);
-        return path;
-    }
 
     private static System.Windows.Controls.ScrollViewer? FindScroll(DependencyObject root)
     {

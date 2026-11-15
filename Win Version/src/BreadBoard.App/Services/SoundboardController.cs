@@ -1,4 +1,4 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using System.IO;
 using System.Net.Http;
 using System.Windows.Threading;
@@ -21,7 +21,7 @@ namespace BreadBoard.App.Services;
 public sealed record SoundEdit(string Name, string Category, string? Hotkey, PlayMode Mode, int Volume, bool Favorite, string Icon, string Tint, SoundRoute Route = SoundRoute.Both);
 
 /// <summary>Registration result for one shortcut owner ("sound:&lt;id&gt;", "global:stopAll", …).</summary>
-public sealed record HotkeyState(string OwnerKey, string Label, string? Combo, string? Error, bool Pending = false);
+public sealed record HotkeyState(string OwnerKey, string Label, string? Combo, string? Error);
 
 /// <summary>
 /// Connects the sound library (config + files), the audio engine and global hotkeys, and exposes
@@ -114,13 +114,12 @@ public sealed partial class SoundboardController : IDisposable
         return c;
     }
 
-    /// <summary>Re-applies playback settings; <paramref name="devices"/> also reopens outputs (hear-on-this-PC).</summary>
-    public async Task ApplyPlaybackSettingsAsync(bool devices = false)
+    /// <summary>Re-applies playback settings (stacking, voice limit).</summary>
+    public async Task ApplyPlaybackSettingsAsync()
     {
         if (_engineStart is null) return; // picked up when the engine starts
         await _engineStart;
-        if (devices) await _host.Audio.StartAsync(AudioConfig());
-        else _host.Audio.ApplyMixSettings(AudioConfig());
+        _host.Audio.ApplyMixSettings(AudioConfig());
         UpdateEngineSummary();
     }
 
@@ -257,29 +256,6 @@ public sealed partial class SoundboardController : IDisposable
         PlaybackTick?.Invoke();
     }
 
-    // ---- app audio ----------------------------------------------------------------------
-
-    /// <summary>Running apps that can be captured (worker thread; enumerating windows and sessions takes a moment).</summary>
-    public Task<IReadOnlyList<AudioApp>> ListAppsAsync()
-    {
-        var devices = _host.Audio.Devices;
-        return Task.Run(() => AudioAppEnumerator.List(devices));
-    }
-
-    /// <summary>Chooses the app whose audio joins the mix, or none. Remembered by executable name.</summary>
-    public async Task SelectAppAsync(AudioApp? app)
-    {
-        _host.Config.Update(c => c.Devices.AppSource = app is null ? null
-            : new AppSourceSelection { ProcessName = app.ProcessName, WindowTitle = app.WindowTitle, DisplayName = app.Label, ExePath = app.ExePath });
-        Log.Info(app is null ? "App audio: none" : $"App audio: {app.ProcessName} (pid {app.ProcessId})");
-        if (app is null && _engineStart is null) return;
-        await EnsureEngineAsync();
-        await _host.Audio.StartAsync(AudioConfig());
-        UpdateEngineSummary();
-    }
-
-
-
     // ---- library ------------------------------------------------------------------------
 
     /// <summary>Imports files (drag-and-drop or picker). Returns the sounds that were added.</summary>
@@ -405,105 +381,6 @@ public sealed partial class SoundboardController : IDisposable
         _byId[entry.Id] = item;
         Items.Add(item);
         return item;
-    }
-
-    // ---- hotkeys ------------------------------------------------------------------------
-
-    /// <summary>Stops global shortcuts while the user records a new one (so the keys reach the dialog).</summary>
-    public IDisposable SuspendHotkeys()
-    {
-        if (_hotkeySuspend++ == 0) _host.Hotkeys.UnregisterAll();
-        return new Resume(this);
-    }
-
-    private sealed class Resume(SoundboardController c) : IDisposable
-    {
-        private bool _done;
-        public void Dispose()
-        {
-            if (_done) return;
-            _done = true;
-            if (--c._hotkeySuspend == 0) _ = c.RegisterHotkeysAsync();
-        }
-    }
-
-    /// <summary>(Re)registers every shortcut and records which ones Windows accepted.</summary>
-    public async Task RegisterHotkeysAsync()
-    {
-        if (_hotkeySuspend > 0) return;
-        await _hotkeyLock.WaitAsync(); // runs one at a time; the last call's result wins
-        try { await RegisterHotkeysCoreAsync(); }
-        finally { _hotkeyLock.Release(); }
-        if (_hotkeySuspend > 0) _host.Hotkeys.UnregisterAll(); // suspended while we were registering
-    }
-
-    private readonly SemaphoreSlim _hotkeyLock = new(1, 1);
-
-    private async Task RegisterHotkeysCoreAsync()
-    {
-        var svc = _host.Hotkeys;
-        svc.UnregisterAll();
-        _hotkeys.Clear();
-        var cfg = _host.Config.Current;
-        var seen = new Dictionary<string, string>(); // combo → label of first owner
-
-        async Task Add(string owner, string label, string? combo, Action down, Action? up = null)
-        {
-            if (!Hotkey.TryParse(combo, out var hk)) { _hotkeys[owner] = new(owner, label, null, null); return; }
-            var text = hk.ToString();
-            string? error;
-            if (seen.TryGetValue(text, out var first)) error = $"also assigned to “{first}”";
-            else
-            {
-                seen[text] = label;
-                error = await svc.RegisterAsync(hk, down, up);
-            }
-            if (error is not null) Log.Warn($"Hotkey {text} for {label} not registered: {error}");
-            _hotkeys[owner] = new(owner, label, text, error);
-        }
-
-        foreach (var s in cfg.Sounds.ToList())
-        {
-            var id = s.Id;
-            await Add($"sound:{id}", s.Name, s.Hotkey,
-                () => _ui.BeginInvoke(() => Press(id)),
-                s.Mode == PlayMode.Hold ? () => _ui.BeginInvoke(() => Release(id)) : null);
-        }
-        await Add("global:stopAll", "Stop all sounds", cfg.Hotkeys.StopAll, () => _ui.BeginInvoke(StopAll));
-        await Add("global:toggleMini", "Toggle mini-player", cfg.Hotkeys.ToggleMini, () => _ui.BeginInvoke(() => ToggleMiniRequested?.Invoke()));
-        await Add("global:muteMic", "Mute microphone", cfg.Hotkeys.MuteMic, () => _ui.BeginInvoke(ToggleMicMute));
-        await Add("global:random", "Play a random sound", cfg.Hotkeys.RandomSound, () => _ui.BeginInvoke(() => PlayRandom()));
-        ApplyPushToTalkWatch(cfg);
-
-        foreach (var item in _byId.Values) item.HotkeyError = _hotkeys.GetValueOrDefault($"sound:{item.Id}")?.Error;
-        HotkeysChanged?.Invoke();
-    }
-
-    /// <summary>Changes only a sound's shortcut.</summary>
-    public Task SetSoundHotkeyAsync(string id, string? combo)
-    {
-        var e = Library.Find(id) ?? throw new KeyNotFoundException(id);
-        return SaveAsync(id, new SoundEdit(e.Name, e.Category, combo, e.Mode, e.Volume, e.Favorite, e.Icon, e.Tint, e.Route));
-    }
-
-    /// <summary>Changes a global shortcut (Stop all / Toggle mini-player).</summary>
-    public async Task SetGlobalHotkeyAsync(string ownerKey, string? combo)
-    {
-        _host.Config.Update(c =>
-        {
-            switch (ownerKey)
-            {
-                case "global:stopAll": c.Hotkeys.StopAll = combo; break;
-                case "global:toggleMini": c.Hotkeys.ToggleMini = combo; break;
-                case "global:muteMic": c.Hotkeys.MuteMic = combo; break;
-                case "global:random": c.Hotkeys.RandomSound = combo; break;
-                case "global:ptt": c.Processing.PushToTalk.Key = combo; break;
-                default: throw new ArgumentOutOfRangeException(nameof(ownerKey));
-            }
-        });
-        await RegisterHotkeysAsync();
-        if (_hotkeys.GetValueOrDefault(ownerKey) is { Error: { } err, Combo: { } c2 })
-            Notice?.Invoke($"{c2} couldn't be registered: {err}", true);
     }
 
     private bool _disposed;

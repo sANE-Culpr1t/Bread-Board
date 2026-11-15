@@ -21,7 +21,7 @@ Module layout:
 
 | Project | Responsibility |
 |---|---|
-| BreadBoard.App | Startup/lifecycle (`Lifecycle/`), soundboard controller (`Services/`), UI and navigation (`Views/`, `Navigation/`, `Theme/`), diagnostics |
+| BreadBoard.App | One folder per feature: `Shell/` (startup, windows, navigation), `Soundboard/`, `Mixer/`, `Shortcuts/`, `Settings/`; shared `Services/` (soundboard controller), `Theme/`, `Diagnostics/` |
 | BreadBoard.Core | Configuration and persistence, logging, hotkey rules, web-link rules (no Windows APIs) |
 | BreadBoard.Audio | Audio engine and audio device management |
 | BreadBoard.Platform | Global hotkeys, single instance (Win32) |
@@ -66,7 +66,9 @@ src/BreadBoard.Core     (net10.0, no audio deps)
   Models/AppConfig      settings model (mirrors the prototype's data)
   Config/ConfigStore    JSON (source-generated), atomic save, corrupt-file backup
   Logging/Log           non-blocking daily file log
-  Hotkeys/              hotkey parsing, reserved/duplicate rules
+  Hotkeys/              hotkey parsing, the global shortcut list, reserved/duplicate rules
+  Sounds/AudioFiles     supported audio files, safe library file names
+  Sounds/AppSourceRules which apps can be captured, and which get a warning
   Sounds/SoundLink      which web links can be imported
   Sounds/SoundLibrary   import (copied into the library), rename/edit, remove, favourites, recent, categories, relocate
 
@@ -101,7 +103,7 @@ through volatile fields and a command queue; live inputs are held ~40 ms behind 
   process loopback capture working (rms 0.22), virtual-mic switch sends silence.
 - `bb probe --app brave`: Brave's YouTube audio captured and heard on CABLE Output (rms 0.13), mic running.
 - `bb download <myinstants link>`: file found, downloaded and decoded.
-- `dotnet test`: 79 passing (real launch with import/play/stop/remove, real capture of an app that closes and restarts, monitor-only fallback, device switching, push-to-talk key watch).
+- `dotnet test`: 92 tests (85 silent ones run with `--filter "Category!=Hardware"`; the rest make sound, press keys or open windows) (real launch with import/play/stop/remove, real capture of an app that closes and restarts, monitor-only fallback, device switching, push-to-talk key watch).
 
 Global hotkeys: `Platform/Hotkeys/GlobalHotkeyService` (RegisterHotKey on its own message thread; hold-to-play watches the
 key only while it is held). `bb run` binds each sound's hotkey, or Num1–Num9 by default, plus Stop all / Mute mic.

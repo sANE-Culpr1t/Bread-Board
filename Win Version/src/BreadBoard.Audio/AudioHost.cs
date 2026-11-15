@@ -15,7 +15,10 @@ public enum SourceState { Off, Starting, Running, Unavailable, Failed }
 
 public sealed record SourceStatus(SourceState State, string? Name, string? Error = null);
 
-public sealed record HostStatus(SourceStatus Mic, SourceStatus App, SourceStatus Output, SourceStatus Monitor);
+public sealed record HostStatus(SourceStatus Mic, SourceStatus App, SourceStatus Output, SourceStatus Monitor)
+{
+    public static readonly HostStatus Off = new(new(SourceState.Off, null), new(SourceState.Off, null), new(SourceState.Off, null), new(SourceState.Off, null));
+}
 
 /// <summary>
 /// Owns the audio graph: devices, capture sources, mixer and outputs. Applies settings from
@@ -34,8 +37,8 @@ public sealed class AudioHost : IAsyncDisposable
     private Timer? _appWait;
     private OutputDevice? _output, _monitor;
     private AppConfig _config = new();
-    private SourceStatus _micStatus = new(SourceState.Off, null), _appStatus = new(SourceState.Off, null);
-    private SourceStatus _outStatus = new(SourceState.Off, null), _monStatus = new(SourceState.Off, null);
+    private SourceStatus _micStatus = HostStatus.Off.Mic, _appStatus = HostStatus.Off.App;
+    private SourceStatus _outStatus = HostStatus.Off.Output, _monStatus = HostStatus.Off.Monitor;
     private int _retryPending;
 
     public AudioHost()
@@ -74,6 +77,7 @@ public sealed class AudioHost : IAsyncDisposable
         _config = c;
         Apply(Mixer.Mic, Mixer.MicRouting, c.Channels.Mic);
         Apply(Mixer.App, Mixer.AppRouting, c.Channels.App);
+        Mixer.AppRouting.ToMonitor = false; // you already hear the app itself; a second, delayed copy would echo
         Apply(Mixer.Board, Mixer.BoardRouting, c.Channels.Soundboard);
         Mixer.BoardMonitor.Gain = c.Channels.Soundboard.Gain / 100f;
         Mixer.BoardMonitor.Muted = c.Channels.Soundboard.Muted;
@@ -103,7 +107,6 @@ public sealed class AudioHost : IAsyncDisposable
         }
     }
 
-
     /// <summary>Decodes and registers a sound so it can be triggered. Runs on a worker thread.</summary>
     public Task<SoundClip> LoadSoundAsync(SoundEntry s) => Task.Run(() =>
     {
@@ -111,8 +114,6 @@ public sealed class AudioHost : IAsyncDisposable
         Soundboard.Register(s.Id, clip, s.Mode, s.Volume, s.Route);
         return clip;
     });
-
-    // ---- graph management (always under _lock) -------------------------------------------
 
     private async Task RebuildAsync()
     {
@@ -149,7 +150,6 @@ public sealed class AudioHost : IAsyncDisposable
         }
         outDevice?.Dispose();
 
-        // Microphone.
         using (var micDevice = Devices.Resolve(DeviceKind.Input, dev.InputDeviceId))
         {
             if (!dev.MicEnabled)
@@ -223,7 +223,6 @@ public sealed class AudioHost : IAsyncDisposable
             }
         }
 
-        // Monitor (your headphones).
         if (!dev.MonitorEnabled)
         {
             StopMonitor(new(SourceState.Off, null));
@@ -310,7 +309,7 @@ public sealed class AudioHost : IAsyncDisposable
     }
 
     /// <summary>How often a missing app is looked for, in milliseconds.</summary>
-    public static int AppWaitMs { get; set; } = 3000;
+    public int AppWaitMs { get; init; } = 3000;
 
     private void StopMonitor(SourceStatus status)
     {

@@ -140,16 +140,7 @@ public sealed class GlobalHotkeyService : IDisposable
         if (key.Length == 1 && char.IsAsciiLetterOrDigit(key[0])) return char.ToUpperInvariant(key[0]);
         if (key.StartsWith("Num", StringComparison.Ordinal) && key.Length == 4 && char.IsAsciiDigit(key[3])) return (uint)(0x60 + key[3] - '0');
         if (key.Length is 2 or 3 && key[0] == 'F' && int.TryParse(key.AsSpan(1), out var f) && f is >= 1 and <= 24) return (uint)(0x70 + f - 1);
-        return key switch
-        {
-            "Space" => 0x20, "Enter" => 0x0D, "Tab" => 0x09, "Esc" => 0x1B, "Backspace" => 0x08,
-            "Insert" => 0x2D, "Delete" => 0x2E, "Home" => 0x24, "End" => 0x23, "PageUp" => 0x21, "PageDown" => 0x22,
-            "Up" => 0x26, "Down" => 0x28, "Left" => 0x25, "Right" => 0x27,
-            "NumPlus" => 0x6B, "NumMinus" => 0x6D, "NumMul" => 0x6A, "NumDiv" => 0x6F, "NumDot" => 0x6E,
-            "Pause" => 0x13, "ScrollLock" => 0x91,
-            "`" => 0xC0, "-" => 0xBD, "=" => 0xBB, "[" => 0xDB, "]" => 0xDD, "\\" => 0xDC, ";" => 0xBA, "'" => 0xDE, "," => 0xBC, "." => 0xBE, "/" => 0xBF,
-            _ => null,
-        };
+        return NamedKeys.TryGetValue(key, out var vk) ? vk : null;
     }
 
     /// <summary>Reverse of <see cref="VirtualKey"/>: the shared key name for a virtual-key code, or null if unsupported.</summary>
@@ -158,17 +149,20 @@ public sealed class GlobalHotkeyService : IDisposable
         if (vk is >= 0x30 and <= 0x39 or >= 0x41 and <= 0x5A) return ((char)vk).ToString();
         if (vk is >= 0x60 and <= 0x69) return $"Num{vk - 0x60}";
         if (vk is >= 0x70 and <= 0x87) return $"F{vk - 0x70 + 1}";
-        foreach (var name in NamedKeys)
-            if (VirtualKey(name) == vk) return name;
+        foreach (var (name, code) in NamedKeys)
+            if (code == vk) return name;
         return null;
     }
 
-    private static readonly string[] NamedKeys =
-    [
-        "Space", "Enter", "Tab", "Esc", "Backspace", "Insert", "Delete", "Home", "End", "PageUp", "PageDown",
-        "Up", "Down", "Left", "Right", "NumPlus", "NumMinus", "NumMul", "NumDiv", "NumDot", "Pause", "ScrollLock",
-        "`", "-", "=", "[", "]", "\\", ";", "'", ",", ".", "/",
-    ];
+    private static readonly Dictionary<string, uint> NamedKeys = new()
+    {
+        ["Space"] = 0x20, ["Enter"] = 0x0D, ["Tab"] = 0x09, ["Esc"] = 0x1B, ["Backspace"] = 0x08,
+        ["Insert"] = 0x2D, ["Delete"] = 0x2E, ["Home"] = 0x24, ["End"] = 0x23, ["PageUp"] = 0x21, ["PageDown"] = 0x22,
+        ["Up"] = 0x26, ["Down"] = 0x28, ["Left"] = 0x25, ["Right"] = 0x27,
+        ["NumPlus"] = 0x6B, ["NumMinus"] = 0x6D, ["NumMul"] = 0x6A, ["NumDiv"] = 0x6F, ["NumDot"] = 0x6E,
+        ["Pause"] = 0x13, ["ScrollLock"] = 0x91,
+        ["`"] = 0xC0, ["-"] = 0xBD, ["="] = 0xBB, ["["] = 0xDB, ["]"] = 0xDD, ["\\"] = 0xDC, [";"] = 0xBA, ["'"] = 0xDE, [","] = 0xBC, ["."] = 0xBE, ["/"] = 0xBF,
+    };
 
     private static uint Mods(HotkeyModifiers m) =>
         (m.HasFlag(HotkeyModifiers.Alt) ? 1u : 0) | (m.HasFlag(HotkeyModifiers.Ctrl) ? 2u : 0) |

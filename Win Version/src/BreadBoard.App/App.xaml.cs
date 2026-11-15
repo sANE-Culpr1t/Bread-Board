@@ -1,12 +1,11 @@
 using System.Diagnostics;
 using System.Windows;
 using System.Windows.Threading;
-using BreadBoard.App.Diagnostics;
-using BreadBoard.App.Lifecycle;
-using BreadBoard.App.Views;
 using BreadBoard.Core;
 using BreadBoard.Core.Logging;
 using BreadBoard.Platform;
+using BreadBoard.App.Diagnostics;
+using BreadBoard.App.Shell;
 
 namespace BreadBoard.App;
 
@@ -21,20 +20,18 @@ public partial class App : Application
     private AppHost? _host;
     private MainWindow? _window;
 
-    public static StartupOptions Options { get; private set; } = new(null, false, null);
+    private StartupOptions Options = new(null, false, null);
 
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
-        var exportIcon = Array.IndexOf(e.Args, "--export-icon");
-        if (exportIcon >= 0 && exportIcon + 1 < e.Args.Length)
+        Options = StartupOptions.Parse(e.Args);
+        if (Options.IconPath is { } icon)
         {
-            var png = Array.IndexOf(e.Args, "--export-png");
-            IconExport.Run(e.Args[exportIcon + 1], png >= 0 && png + 1 < e.Args.Length ? e.Args[png + 1] : null);
+            IconExport.Run(icon, Options.IconPngDir);
             Shutdown(0);
             return;
         }
-        Options = StartupOptions.Parse(e.Args);
         if (Options.DataDir is not null) AppPaths.UseRoot(Options.DataDir);
         Log.Init(AppPaths.Logs);
         Log.Info($"Starting Bread Board {typeof(App).Assembly.GetName().Version} (.NET {Environment.Version}, {Environment.OSVersion.VersionString})");

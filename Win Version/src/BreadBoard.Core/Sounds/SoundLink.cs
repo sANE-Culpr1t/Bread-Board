@@ -10,7 +10,6 @@ public sealed record SoundLink(SoundLinkKind Kind, Uri Url, string SuggestedName
 /// <summary>Recognises links that can be imported from the web (same rules as the prototype).</summary>
 public static partial class SoundLinkParser
 {
-    public static readonly string[] AudioExtensions = ["mp3", "wav", "ogg"];
 
     public static bool TryParse(string? raw, out SoundLink? link, out string? error)
     {
@@ -29,8 +28,7 @@ public static partial class SoundLinkParser
 
         var path = Uri.UnescapeDataString(uri.AbsolutePath);
         var file = path.Split('/', StringSplitOptions.RemoveEmptyEntries).LastOrDefault() ?? "";
-        var ext = Path.GetExtension(file).TrimStart('.').ToLowerInvariant();
-        if (AudioExtensions.Contains(ext))
+        if (AudioFiles.IsSupported(file))
         {
             link = new(SoundLinkKind.DirectFile, uri, Title(Path.GetFileNameWithoutExtension(file)), file);
             return true;
@@ -44,7 +42,7 @@ public static partial class SoundLinkParser
             return true;
         }
 
-        error = "Paste a Myinstants sound page link or a direct .mp3 / .wav / .ogg link.";
+        error = $"Paste a Myinstants sound page link or a direct link to a {AudioFiles.Description} file.";
         return false;
     }
 
@@ -52,7 +50,7 @@ public static partial class SoundLinkParser
     {
         var words = Separators().Replace(slug, " ").Trim();
         var t = CultureInfo.InvariantCulture.TextInfo.ToTitleCase(words);
-        return t.Length > 40 ? t[..40] : t;
+        return t.Length > SoundLibrary.MaxNameLength ? t[..SoundLibrary.MaxNameLength] : t;
     }
 
     [GeneratedRegex(@"/instant/([^/]+)/?$", RegexOptions.IgnoreCase)]

@@ -12,6 +12,7 @@ namespace BreadBoard.Core.Config;
     ReadCommentHandling = JsonCommentHandling.Skip,
     AllowTrailingCommas = true)]
 [JsonSerializable(typeof(AppConfig))]
+[JsonSerializable(typeof(Profile))]
 internal sealed partial class ConfigJsonContext : JsonSerializerContext;
 
 /// <summary>Loads and atomically saves <see cref="AppConfig"/> as JSON.</summary>
@@ -32,7 +33,8 @@ public sealed class ConfigStore(string path)
         {
             // Keep the unreadable file for inspection instead of silently overwriting it.
             var backup = Path + $".bad-{DateTime.Now:yyyyMMddHHmmss}";
-            try { File.Copy(Path, backup, overwrite: true); } catch (IOException) { }
+            try { File.Copy(Path, backup, overwrite: true); }
+            catch (Exception copyEx) when (copyEx is IOException or UnauthorizedAccessException) { backup = "none: " + copyEx.Message; }
             Log.Error($"Config unreadable, using defaults (backup: {backup})", ex);
             return new AppConfig();
         }
@@ -47,7 +49,7 @@ public sealed class ConfigStore(string path)
             cfg.Devices.MonitorEnabled = cfg.Playback.HearOnThisPc;
             Log.Info("Settings migrated to version 2");
         }
-        if (!DeviceSettings.LatencyChoices.Contains(cfg.Devices.LatencyMs)) cfg.Devices.LatencyMs = 20;
+        if (!Array.Exists(DeviceSettings.LatencyChoices, l => l.Ms == cfg.Devices.LatencyMs)) cfg.Devices.LatencyMs = DeviceSettings.DefaultLatencyMs;
         cfg.Version = AppConfig.CurrentVersion;
         return cfg;
     }
@@ -55,6 +57,9 @@ public sealed class ConfigStore(string path)
     /// <summary>Deep copy (used to hand the audio engine a snapshot it may adjust).</summary>
     public static AppConfig Clone(AppConfig config) =>
         JsonSerializer.Deserialize(JsonSerializer.SerializeToUtf8Bytes(config, ConfigJsonContext.Default.AppConfig), ConfigJsonContext.Default.AppConfig)!;
+
+    public static Profile Clone(Profile profile) =>
+        JsonSerializer.Deserialize(JsonSerializer.SerializeToUtf8Bytes(profile, ConfigJsonContext.Default.Profile), ConfigJsonContext.Default.Profile)!;
 
     public void Save(AppConfig config)
     {

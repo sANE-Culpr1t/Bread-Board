@@ -13,13 +13,8 @@ public sealed class SoundLibrary(ConfigService config, string libraryDir)
 {
     public const int MaxRecent = 12;
     public const int MaxNameLength = 40;
-    public static readonly string[] Extensions = [".wav", ".mp3", ".ogg"];
 
     public string LibraryDir { get; } = libraryDir;
-    public IReadOnlyList<SoundEntry> Sounds => config.Current.Sounds;
-
-    public static bool IsSupported(string path) =>
-        Extensions.Contains(Path.GetExtension(path), StringComparer.OrdinalIgnoreCase);
 
     public SoundEntry? Find(string id) => config.Current.Sounds.Find(s => s.Id == id);
 
@@ -51,7 +46,7 @@ public sealed class SoundLibrary(ConfigService config, string libraryDir)
     public SoundEntry Import(string sourcePath, string? name = null, string? category = null)
     {
         if (!File.Exists(sourcePath)) throw new FileNotFoundException("File not found", sourcePath);
-        if (!IsSupported(sourcePath)) throw new NotSupportedException($"{Path.GetFileName(sourcePath)} isn't a WAV, MP3 or OGG file.");
+        if (!AudioFiles.IsSupported(sourcePath)) throw new NotSupportedException($"{Path.GetFileName(sourcePath)} isn't a {AudioFiles.Description} file.");
         var target = CopyIntoLibrary(sourcePath);
         return Add(target, name ?? NameFromFile(sourcePath), category, sourceUrl: null);
     }
@@ -64,7 +59,7 @@ public sealed class SoundLibrary(ConfigService config, string libraryDir)
             Name = CleanName(name),
             FilePath = libraryFile,
             SourceUrl = sourceUrl,
-            Category = string.IsNullOrWhiteSpace(category) ? "General" : category.Trim(),
+            Category = string.IsNullOrWhiteSpace(category) ? SoundEntry.DefaultCategory : category.Trim(),
         };
         config.Update(c =>
         {
@@ -74,7 +69,7 @@ public sealed class SoundLibrary(ConfigService config, string libraryDir)
         return entry;
     }
 
-    /// <summary>Applies an edit. The caller has already validated the hotkey with <see cref="HotkeyRules.Validate"/>.</summary>
+    /// <summary>Applies an edit and normalises it. The caller has already validated the hotkey with <see cref="HotkeyRules.Validate"/>.</summary>
     public void Update(string id, Action<SoundEntry> change)
     {
         config.Update(c =>
@@ -83,7 +78,7 @@ public sealed class SoundLibrary(ConfigService config, string libraryDir)
             change(s);
             s.Name = CleanName(s.Name);
             s.Volume = Math.Clamp(s.Volume, 0, 100);
-            s.Category = string.IsNullOrWhiteSpace(s.Category) ? "General" : s.Category.Trim();
+            s.Category = string.IsNullOrWhiteSpace(s.Category) ? SoundEntry.DefaultCategory : s.Category.Trim();
             s.Hotkey = Hotkey.TryParse(s.Hotkey, out var hk) ? hk.ToString() : null;
             AddCategory(c, s.Category);
         });
@@ -92,7 +87,7 @@ public sealed class SoundLibrary(ConfigService config, string libraryDir)
     /// <summary>Points a sound at a new file (copied into the library), e.g. after the old one went missing.</summary>
     public void Relocate(string id, string newSource)
     {
-        if (!IsSupported(newSource)) throw new NotSupportedException($"{Path.GetFileName(newSource)} isn't a WAV, MP3 or OGG file.");
+        if (!AudioFiles.IsSupported(newSource)) throw new NotSupportedException($"{Path.GetFileName(newSource)} isn't a {AudioFiles.Description} file.");
         var target = CopyIntoLibrary(newSource);
         Update(id, s => s.FilePath = target);
     }
@@ -163,13 +158,7 @@ public sealed class SoundLibrary(ConfigService config, string libraryDir)
     {
         Directory.CreateDirectory(LibraryDir);
         if (IsInLibrary(source)) return Path.GetFullPath(source);
-        var name = Path.GetFileNameWithoutExtension(source);
-        var bad = Path.GetInvalidFileNameChars();
-        name = new string([.. name.Select(ch => bad.Contains(ch) ? '_' : ch)]).Trim();
-        if (name.Length == 0) name = "sound";
-        var ext = Path.GetExtension(source).ToLowerInvariant();
-        var target = Path.Combine(LibraryDir, name + ext);
-        for (var i = 2; File.Exists(target); i++) target = Path.Combine(LibraryDir, $"{name} ({i}){ext}");
+        var target = AudioFiles.UniquePath(LibraryDir, Path.GetFileNameWithoutExtension(source), Path.GetExtension(source));
         File.Copy(source, target);
         return target;
     }

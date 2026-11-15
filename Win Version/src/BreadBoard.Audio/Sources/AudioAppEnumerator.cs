@@ -96,8 +96,7 @@ public static partial class AudioAppEnumerator
 
     /// <summary>Finds the best running match for a remembered selection.</summary>
     public static AudioApp? Find(IReadOnlyList<AudioApp> apps, string processName) =>
-        apps.Where(a => string.Equals(a.ProcessName, processName, StringComparison.OrdinalIgnoreCase)
-                        || string.Equals(a.ProcessName + ".exe", processName, StringComparison.OrdinalIgnoreCase))
+        apps.Where(a => string.Equals(a.ProcessName, AppSourceRules.BaseName(processName), StringComparison.OrdinalIgnoreCase))
             .OrderByDescending(a => a.IsPlaying).ThenByDescending(a => a.HasAudioSession).FirstOrDefault();
 
     /// <summary>
@@ -106,8 +105,7 @@ public static partial class AudioAppEnumerator
     /// </summary>
     public static AudioApp? FindRunning(string processName)
     {
-        var name = processName.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) ? processName[..^4] : processName;
-        var procs = Process.GetProcessesByName(name);
+        var procs = Process.GetProcessesByName(AppSourceRules.BaseName(processName));
         try
         {
             if (procs.Length == 0) return null;
@@ -126,11 +124,11 @@ public static partial class AudioAppEnumerator
     /// <summary>True if any process with this name is running (cheap; used while waiting for an app to start).</summary>
     public static bool IsRunning(string processName)
     {
-        var name = processName.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) ? processName[..^4] : processName;
-        var procs = Process.GetProcessesByName(name);
+        var procs = Process.GetProcessesByName(AppSourceRules.BaseName(processName));
         foreach (var p in procs) p.Dispose();
         return procs.Length > 0;
     }
+
 
     private static string? Describe(string? exe)
     {
@@ -155,8 +153,6 @@ public static partial class AudioAppEnumerator
         }
         finally { CloseHandle(h); }
     }
-
-    // ---- Win32 ---------------------------------------------------------------------------
 
     private static List<(int Pid, string Title)> VisibleWindows()
     {

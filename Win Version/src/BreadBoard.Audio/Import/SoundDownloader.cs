@@ -14,6 +14,7 @@ public sealed record DownloadedSound(string FilePath, string SuggestedName, Uri 
 public sealed partial class SoundDownloader(HttpClient http)
 {
     public const long MaxBytes = 25 * 1024 * 1024;
+    private const string TooBig = "The sound file is larger than 25 MB.";
 
     public static HttpClient CreateHttpClient()
     {
@@ -27,14 +28,13 @@ public sealed partial class SoundDownloader(HttpClient http)
         if (!SoundLinkParser.TryParse(link, out var parsed, out var error)) throw new ArgumentException(error, nameof(link));
         var audioUrl = parsed!.Kind == SoundLinkKind.DirectFile ? parsed.Url : await FindAudioOnPageAsync(parsed.Url, ct).ConfigureAwait(false);
 
-        var ext = Path.GetExtension(audioUrl.AbsolutePath).ToLowerInvariant();
-        if (!SoundLinkParser.AudioExtensions.Contains(ext.TrimStart('.'))) ext = ".mp3";
+        var ext = AudioFiles.IsSupported(audioUrl.AbsolutePath) ? Path.GetExtension(audioUrl.AbsolutePath) : ".mp3";
         Directory.CreateDirectory(libraryDir);
-        var path = UniquePath(libraryDir, SafeFileName(parsed.SuggestedName), ext);
+        var path = AudioFiles.UniquePath(libraryDir, parsed.SuggestedName, ext);
 
         using var resp = await http.GetAsync(audioUrl, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
         resp.EnsureSuccessStatusCode();
-        if (resp.Content.Headers.ContentLength > MaxBytes) throw new InvalidOperationException("The sound file is larger than 25 MB.");
+        if (resp.Content.Headers.ContentLength > MaxBytes) throw new InvalidOperationException(TooBig);
         var type = resp.Content.Headers.ContentType?.MediaType ?? "";
         if (type.StartsWith("text/", StringComparison.OrdinalIgnoreCase))
             throw new InvalidOperationException("That link returned a web page, not an audio file.");
@@ -51,7 +51,7 @@ public sealed partial class SoundDownloader(HttpClient http)
                 while ((n = await src.ReadAsync(buf, ct).ConfigureAwait(false)) > 0)
                 {
                     total += n;
-                    if (total > MaxBytes) throw new InvalidOperationException("The sound file is larger than 25 MB.");
+                    if (total > MaxBytes) throw new InvalidOperationException(TooBig);
                     await dst.WriteAsync(buf.AsMemory(0, n), ct).ConfigureAwait(false);
                 }
             }
@@ -73,19 +73,6 @@ public sealed partial class SoundDownloader(HttpClient http)
         return new Uri(page, m.Groups[1].Value);
     }
 
-    private static string SafeFileName(string name)
-    {
-        var bad = Path.GetInvalidFileNameChars();
-        var clean = new string([.. name.Select(c => bad.Contains(c) ? '_' : c)]).Trim();
-        return clean.Length == 0 ? "sound" : clean;
-    }
-
-    private static string UniquePath(string dir, string name, string ext)
-    {
-        var path = Path.Combine(dir, name + ext);
-        for (var i = 2; File.Exists(path); i++) path = Path.Combine(dir, $"{name} ({i}){ext}");
-        return path;
-    }
 
     // Myinstants pages reference their file as /media/sounds/<name>.mp3 (play button / download link).
     [GeneratedRegex(@"[""'(](/media/sounds/[^""'\s)]+\.(?:mp3|wav|ogg))", RegexOptions.IgnoreCase)]

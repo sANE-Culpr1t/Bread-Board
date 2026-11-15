@@ -1,5 +1,34 @@
 # Changelog — Bread Board (Win Version)
 
+## Refactor — code sorted by feature, rules in one place
+
+### Changed (no new features)
+- **App sorted by feature**: `Shell/` (app host, main window, mini-player, navigation, start-up options),
+  `Soundboard/`, `Mixer/`, `Shortcuts/`, `Settings/`, `Theme/` (styles, page builders, dialog shell) and `Services/`
+  (the controller, split by feature: hotkeys, mixer, app audio, sequences, profiles). The old
+  `Views/ViewModels/Controls/Lifecycle/Navigation` folders are gone.
+- **One source per rule**: the global shortcuts (labels, saved field, order) in `HotkeyRules.Globals`; supported audio
+  files and library file names in `AudioFiles`; the meter scale in `MeterScale` (app and `bb`); gain ceiling,
+  buffer-size choices, default category in the settings model; "app audio is never monitored" in the engine.
+- The controller has one path that applies settings to the audio engine, one engine state
+  (`Idle / Live / MonitorOnly / Problem`) and one set of meter levels.
+- No folder depends on one that depends back on it: the controller no longer takes the app host, and Settings no
+  longer needs the main window (the mini-player follows the saved opacity and keep-on-top itself).
+- `bb add` imports through the sound library (safe file names, no overwrite) like the app.
+- Dead code removed (unused settings, members, glyphs, test-only overloads).
+
+### Fixed
+- Meters for the mic and master now drop to zero when metering stops (only two of the four were reset).
+- An unreadable settings file that also can't be backed up (access denied) no longer stops start-up; same for
+  old logs that can't be deleted.
+
+### Tests
+- One file per feature (`SoundLibraryTests`, `ProfileTests`, `PushToTalkKeyTests`, …).
+- Tests that make sound, press keys or open windows are tagged `Category=Hardware`; run the silent ones with
+  `dotnet test --filter "Category!=Hardware"`.
+- The mixer-settings test now checks what reaches the virtual mic instead of copying the settings code; the voice
+  limit test proves the oldest sound is dropped; the decoder test checks 48 kHz.
+
 ## Iteration 6 — Branding and Optimization (v1.0.0)
 
 ### Added

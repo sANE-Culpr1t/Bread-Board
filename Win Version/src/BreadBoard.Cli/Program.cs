@@ -1,10 +1,4 @@
-// Bread Board backend test host. Exercises the real audio engine without a UI.
-//   bb devices                 list audio inputs/outputs
-//   bb apps                    list running apps that can be captured
-//   bb download <link>         download a sound (Myinstants page or .mp3/.wav/.ogg) into the library
-//   bb add <file|link>         add a sound to the library config
-//   bb run [--app <name>] [--no-mic]   live mix: mic + app audio + soundboard -> virtual mic
-//   bb selftest                automated end-to-end test through the virtual cable
+// Bread Board backend test host: exercises the real audio engine without a UI (see Usage below).
 using BreadBoard.Audio;
 using BreadBoard.Audio.Devices;
 using BreadBoard.Audio.Import;
@@ -16,6 +10,7 @@ using BreadBoard.Core;
 using BreadBoard.Core.Config;
 using BreadBoard.Core.Logging;
 using BreadBoard.Core.Models;
+using BreadBoard.Core.Sounds;
 
 Log.Init(AppPaths.Logs);
 Log.Echo = args.Contains("--verbose") ? Console.Error.WriteLine : null;
@@ -56,7 +51,11 @@ int Usage()
           bb download <link>                 download a sound into the library
           bb add <file|link>                 add a sound to the library
           bb run [--app <name>] [--no-mic]   live mix to the virtual mic (keys 1-9 play sounds)
+          bb probe [--app <name>] [--no-mic] [--no-gate] [--seconds N]
+                                             mix for a few seconds and report what reached the cable
           bb selftest                        automated test through the virtual cable
+          bb tone [--seconds N] [--speakers] play a 440 Hz tone (a capturable test app)
+          --verbose                          echo the log to the console
         """);
     return 0;
 }
@@ -98,35 +97,33 @@ async Task<int> Download(string link)
 
 async Task<int> Add(string source)
 {
-    var cfg = store.Load();
+    using var config = new ConfigService(store);
+    var library = new SoundLibrary(config, AppPaths.SoundLibrary);
     SoundEntry entry;
-    if (File.Exists(source))
-    {
-        var dest = Path.Combine(AppPaths.SoundLibrary, Path.GetFileName(source));
-        Directory.CreateDirectory(AppPaths.SoundLibrary);
-        if (!File.Exists(dest)) File.Copy(source, dest);
-        entry = new SoundEntry { Name = Path.GetFileNameWithoutExtension(source), FilePath = dest };
-    }
+    if (File.Exists(source)) entry = library.Import(source);
     else
     {
         using var http = SoundDownloader.CreateHttpClient();
-        var r = await new SoundDownloader(http).DownloadAsync(source, AppPaths.SoundLibrary);
-        entry = new SoundEntry { Name = r.SuggestedName, FilePath = r.FilePath, SourceUrl = r.SourceUrl.ToString() };
+        var r = await new SoundDownloader(http).DownloadAsync(source, library.LibraryDir);
+        entry = library.Add(r.FilePath, r.SuggestedName, null, r.SourceUrl.ToString());
     }
     var clip = SoundLoader.Load(entry.Id, entry.FilePath);
-    cfg.Sounds.Add(entry);
-    store.Save(cfg);
-    Console.WriteLine($"Added '{entry.Name}' ({clip.Duration.TotalSeconds:0.0} s) as sound #{cfg.Sounds.Count}");
+    Console.WriteLine($"Added '{entry.Name}' ({clip.Duration.TotalSeconds:0.0} s) as sound #{config.Current.Sounds.Count}");
     return 0;
+}
+
+/// <summary>Saved settings with the --app / --no-mic overrides of run and probe.</summary>
+AppConfig MixConfig()
+{
+    var cfg = store.Load();
+    if (Arg("--app") is { } app) cfg.Devices.AppSource = new AppSourceSelection { ProcessName = app };
+    if (args.Contains("--no-mic")) cfg.Devices.MicEnabled = false;
+    return cfg;
 }
 
 async Task<int> Run()
 {
-    var cfg = store.Load();
-    var appArg = Arg("--app");
-    if (appArg is not null) cfg.Devices.AppSource = new AppSourceSelection { ProcessName = appArg };
-    if (args.Contains("--no-mic")) cfg.Devices.MicEnabled = false;
-
+    var cfg = MixConfig();
     await using var host = new AudioHost();
     foreach (var s in cfg.Sounds)
     {
@@ -161,7 +158,7 @@ async Task<int> Run()
         var err = await hotkeys.RegisterAsync(hk, action);
         Console.WriteLine($"  {hk,-14} {label}{(err is null ? "" : $"  !! {err}")}");
     }
-    await Global(cfg.Hotkeys.StopAll, "Stop all sounds", host.Soundboard.StopAll);
+    await Global(cfg.Hotkeys.StopAll, HotkeyRules.Global(HotkeyRules.StopAll).Label, host.Soundboard.StopAll);
     await Global(cfg.Hotkeys.MuteMic, "Mute / unmute mic", () => { cfg.Channels.Mic.Muted = !cfg.Channels.Mic.Muted; host.ApplyMixSettings(cfg); });
 
     Console.WriteLine("""
@@ -186,7 +183,7 @@ async Task<int> Run()
             else if (key == '[') g.Value = Math.Max(0, g.Value - 1);
             else if (key == ']') g.Value = Math.Min(50, g.Value + 1);
             else if (key is '-' or '_') cfg.Channels.Mic.Gain = Math.Max(0, cfg.Channels.Mic.Gain - 10);
-            else if (key is '+' or '=') cfg.Channels.Mic.Gain = Math.Min(200, cfg.Channels.Mic.Gain + 10);
+            else if (key is '+' or '=') cfg.Channels.Mic.Gain = Math.Min(ChannelSettings.MaxGain, cfg.Channels.Mic.Gain + 10);
             else if (digit >= 0 && digit < sounds.Count) host.Soundboard.Trigger(sounds[digit].Id);
             host.ApplyMixSettings(cfg);
         }
@@ -202,10 +199,7 @@ async Task<int> Run()
 /// <summary>Non-interactive: runs mic + app → virtual mic for a few seconds and reports what reached CABLE Output.</summary>
 async Task<int> Probe()
 {
-    var cfg = store.Load();
-    var appArg = Arg("--app");
-    if (appArg is not null) cfg.Devices.AppSource = new AppSourceSelection { ProcessName = appArg };
-    if (args.Contains("--no-mic")) cfg.Devices.MicEnabled = false;
+    var cfg = MixConfig();
     var seconds = int.TryParse(Arg("--seconds"), out var s) ? s : 4;
     if (args.Contains("--no-gate")) cfg.Processing.NoiseGate.Enabled = false;
 
@@ -340,11 +334,9 @@ string? Arg(string name)
     return i >= 0 && i + 1 < args.Length ? args[i + 1] : null;
 }
 
-/// <summary>dB-scaled meter, -60 dB … 0 dB, so quiet microphones still show movement.</summary>
 static string Bar(float level)
 {
-    var db = level <= 1e-6f ? -60 : 20 * Math.Log10(level);
-    var n = (int)Math.Round(Math.Clamp((db + 60) / 60, 0, 1) * 10);
+    var n = (int)Math.Round(BreadBoard.Audio.Mixing.MeterScale.Of(level) * 10);
     return new string('#', n) + new string('.', 10 - n);
 }
 

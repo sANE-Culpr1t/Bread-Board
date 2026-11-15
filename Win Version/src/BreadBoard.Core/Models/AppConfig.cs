@@ -14,7 +14,8 @@ public sealed class SoundEntry
     public string FilePath { get; set; } = "";
     /// <summary>Website the file was downloaded from, if any.</summary>
     public string? SourceUrl { get; set; }
-    public string Category { get; set; } = "General";
+    public const string DefaultCategory = "General";
+    public string Category { get; set; } = DefaultCategory;
     public string? Hotkey { get; set; }
     public int Volume { get; set; } = 85; // 0–100
     public PlayMode Mode { get; set; } = PlayMode.OneShot;
@@ -28,7 +29,8 @@ public sealed class SoundEntry
 
 public sealed class ChannelSettings
 {
-    public int Gain { get; set; } = 80; // 0–200 (above 100 = boost, useful for quiet mics)
+    public const int MaxGain = 200; // above 100 % boosts: useful for quiet mics
+    public int Gain { get; set; } = 80;
     public bool Muted { get; set; }
     public bool ToVirtualMic { get; set; } = true;
     public bool ToMonitor { get; set; }
@@ -72,7 +74,6 @@ public sealed class ProcessingSettings
 public sealed class AppSourceSelection
 {
     public string ProcessName { get; set; } = "";
-    public string? WindowTitle { get; set; }
     /// <summary>Friendly name ("Brave Browser") shown while the app isn't running.</summary>
     public string? DisplayName { get; set; }
     /// <summary>Executable path when known (for the icon).</summary>
@@ -91,9 +92,10 @@ public sealed class DeviceSettings
     public bool MonitorEnabled { get; set; } = true;
     public AppSourceSelection? AppSource { get; set; }
     /// <summary>Audio buffer size in ms for outputs and captures: lower = less delay, higher = fewer dropouts.</summary>
-    public int LatencyMs { get; set; } = 20;
+    public int LatencyMs { get; set; } = DefaultLatencyMs;
 
-    public static readonly int[] LatencyChoices = [10, 20, 40, 80];
+    public const int DefaultLatencyMs = 20;
+    public static readonly (int Ms, string Hint)[] LatencyChoices = [(10, "lowest delay"), (20, "recommended"), (40, ""), (80, "most stable")];
 }
 
 public sealed class PlaybackSettings
@@ -112,11 +114,8 @@ public sealed class GlobalHotkeys
     public string? ToggleMini { get; set; } = "Ctrl+Shift+G";
 }
 
-public sealed class SoundSite
-{
-    public string Name { get; set; } = "";
-    public string Url { get; set; } = "";
-}
+/// <summary>The mini-player's quick list.</summary>
+public enum MiniTab { Favourites, Recent }
 
 /// <summary>Window placement and navigation state restored on the next launch.</summary>
 public sealed class UiSettings
@@ -136,8 +135,7 @@ public sealed class UiSettings
     public bool MiniOpenOnStart { get; set; }
     /// <summary>Mini-player opacity, 40–100 %.</summary>
     public int MiniOpacity { get; set; } = 100;
-    /// <summary>Mini-player quick list: "Favourites" or "Recent".</summary>
-    public string MiniTab { get; set; } = "Favourites";
+    public MiniTab MiniTab { get; set; } = MiniTab.Favourites;
 }
 
 public sealed class AppConfig
@@ -154,7 +152,7 @@ public sealed class AppConfig
     public DeviceSettings Devices { get; set; } = new();
     public PlaybackSettings Playback { get; set; } = new();
     public GlobalHotkeys Hotkeys { get; set; } = new();
-    public List<SoundSite> SoundSites { get; set; } = [new() { Name = "Myinstants", Url = "https://www.myinstants.com/" }];
+
     public List<Profile> Profiles { get; set; } = [];
     public string ActiveProfile { get; set; } = "General use";
 }

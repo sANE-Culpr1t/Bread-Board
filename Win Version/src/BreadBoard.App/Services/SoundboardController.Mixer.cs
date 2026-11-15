@@ -10,16 +10,12 @@ public enum MixChannel { Mic, App, Soundboard, Master }
 
 public enum Processor { NoiseGate, Compressor, Limiter, Ducking }
 
-/// <summary>Mixer, devices, processing, mutes and push-to-talk (Iteration 4).</summary>
+/// <summary>Mixer, devices, processing, mutes and push-to-talk.</summary>
 public sealed partial class SoundboardController
 {
     private bool _metersVisible = true;
 
-    public float MicLevel { get; private set; }
-    /// <summary>No virtual-mic output: the monitor device plays the mix so you still hear it.</summary>
-    public bool MonitorOnlyMode => _host.AudioCreated && _host.Audio.MonitorOnly;
-    public float MasterLevel { get; private set; }
-    public HostStatus Status { get; private set; } = new(new(SourceState.Off, null), new(SourceState.Off, null), new(SourceState.Off, null), new(SourceState.Off, null));
+    public HostStatus Status { get; private set; } = HostStatus.Off;
     /// <summary>Push-to-talk key is held (true) or released (false).</summary>
     public event Action<bool>? PushToTalkChanged;
     /// <summary>Levels, mutes, routing or processing changed (cheap UI refresh).</summary>
@@ -45,6 +41,9 @@ public sealed partial class SoundboardController
         _ => c.Channels.Master,
     };
 
+    /// <summary>App audio is never monitored: you already hear the app itself (enforced by the engine).</summary>
+    public static bool CanMonitor(MixChannel ch) => ch is MixChannel.Mic or MixChannel.Soundboard;
+
     public static ToggleWithValue Settings(AppConfig c, Processor p) => p switch
     {
         Processor.NoiseGate => c.Processing.NoiseGate,
@@ -56,10 +55,10 @@ public sealed partial class SoundboardController
     /// <summary>Changes a channel's gain (0–200 %), mute or routing; applied to the running mix at once.</summary>
     public void SetChannel(MixChannel ch, int? gain = null, bool? muted = null, bool? toVirtualMic = null, bool? toMonitor = null)
     {
-        _host.Config.Update(c =>
+        _config.Update(c =>
         {
             var s = Settings(c, ch);
-            if (gain is { } g) s.Gain = Math.Clamp(g, 0, 200);
+            if (gain is { } g) s.Gain = Math.Clamp(g, 0, ChannelSettings.MaxGain);
             if (muted is { } m) s.Muted = m;
             if (toVirtualMic is { } v) s.ToVirtualMic = v;
             if (toMonitor is { } mon) s.ToMonitor = mon;
@@ -70,7 +69,7 @@ public sealed partial class SoundboardController
 
     public void SetProcessing(Processor p, bool? enabled = null, int? value = null)
     {
-        _host.Config.Update(c =>
+        _config.Update(c =>
         {
             var s = Settings(c, p);
             if (enabled is { } e) s.Enabled = e;
@@ -92,7 +91,7 @@ public sealed partial class SoundboardController
     /// <summary>Turns the virtual mic on/off (off = silence is sent, meters keep working).</summary>
     public void SetVirtualMic(bool on)
     {
-        _host.Config.Update(c => c.Devices.VirtualMicEnabled = on);
+        _config.Update(c => c.Devices.VirtualMicEnabled = on);
         ApplyMix();
         MixChanged?.Invoke();
     }
@@ -100,19 +99,24 @@ public sealed partial class SoundboardController
     /// <summary>Device choices, mic/monitor on-off and buffer size: reopens only what changed.</summary>
     public async Task SetDevicesAsync(Action<DeviceSettings> change)
     {
-        _host.Config.Update(c => change(c.Devices));
-        if (Config.Devices.MicEnabled || _engineStart is not null) await EnsureEngineAsync();
-        if (_engineStart is null) return;
-        await _engineStart;
-        await _host.Audio.StartAsync(AudioConfig());
-        UpdateEngineSummary();
+        _config.Update(c => change(c.Devices));
+        await RestartAudioAsync();
     }
 
-    public IReadOnlyList<AudioDeviceInfo> ListDevices(DeviceKind kind) => _disposed ? [] : _host.Audio.Devices.GetDevices(kind);
+    public IReadOnlyList<AudioDeviceInfo> ListDevices(DeviceKind kind)
+    {
+        if (_disposed) return [];
+        try { return _audio.Value.Devices.GetDevices(kind); }
+        catch (System.Runtime.InteropServices.COMException ex)
+        {
+            Log.Warn($"Listing {kind} devices failed", ex);
+            return [];
+        }
+    }
 
     public async Task SetPushToTalkAsync(bool enabled)
     {
-        _host.Config.Update(c => c.Processing.PushToTalk.Enabled = enabled);
+        _config.Update(c => c.Processing.PushToTalk.Enabled = enabled);
         ApplyMix();
         await RegisterHotkeysAsync();
         MixChanged?.Invoke();
@@ -120,7 +124,7 @@ public sealed partial class SoundboardController
 
     private void ApplyMix()
     {
-        if (EngineStarted) _host.Audio.ApplyMixSettings(AudioConfig());
+        if (EngineStarted) _audio.Value.ApplyMixSettings(AudioConfig());
     }
 
     /// <summary>Push-to-talk watches its key without blocking it (the key still works in games and chat).</summary>
@@ -130,14 +134,14 @@ public sealed partial class SoundboardController
         var key = Hotkey.TryParse(ptt.Key, out var hk) ? hk.Key : null;
         if (ptt.Enabled && key is not null)
         {
-            _host.Hotkeys.WatchKey(key, down =>
+            _hotkeyService.Value.WatchKey(key, down =>
             {
-                if (_host.AudioCreated) _host.Audio.Mixer.PushToTalkDown = down;
+                if (_audio.IsValueCreated) _audio.Value.Mixer.PushToTalkDown = down;
                 _ui.BeginInvoke(() => { PushToTalkDown = down; PushToTalkChanged?.Invoke(down); });
             });
             Log.Info($"Push-to-talk on {key}");
         }
-        else _host.Hotkeys.WatchKey(null, null);
-        _hotkeys["global:ptt"] = new("global:ptt", "Push-to-talk", key, null);
+        else _hotkeyService.Value.WatchKey(null, null);
+        _hotkeys[HotkeyRules.PushToTalk] = new(HotkeyRules.PushToTalk, HotkeyRules.Global(HotkeyRules.PushToTalk).Label, key, null);
     }
 }

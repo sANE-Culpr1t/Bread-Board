@@ -1,0 +1,130 @@
+<UserControl x:Class="BreadBoard.App.Soundboard.SoundboardPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:t="clr-namespace:BreadBoard.App.Theme"
+             xmlns:c="clr-namespace:BreadBoard.App.Soundboard"
+             AllowDrop="True">
+    <UserControl.Resources>
+        <!-- Sound pad -->
+        <Style x:Key="PadItem" TargetType="ListBoxItem">
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="AutomationProperties.Name" Value="{Binding Name}"/>
+            <Setter Property="ToolTip" Value="{Binding ProblemText}"/>
+            <Setter Property="ToolTipService.IsEnabled" Value="{Binding HasProblem}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ListBoxItem">
+                        <Border x:Name="Card" Style="{StaticResource Card}" BorderThickness="1.5" BorderBrush="Transparent">
+                            <ContentPresenter x:Name="Content"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Card" Property="Background" Value="{StaticResource RaisedBrush}"/>
+                                <Setter TargetName="Card" Property="RenderTransform">
+                                    <Setter.Value><TranslateTransform Y="-2"/></Setter.Value>
+                                </Setter>
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="Card" Property="BorderBrush" Value="#99E3C8A4"/>
+                            </Trigger>
+                            <DataTrigger Binding="{Binding Playing}" Value="True">
+                                <Setter TargetName="Card" Property="BorderBrush" Value="{StaticResource AccentBrush}"/>
+                                <Setter TargetName="Card" Property="Background" Value="#2E2A25"/>
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding IsMissing}" Value="True">
+                                <Setter TargetName="Content" Property="Opacity" Value="0.45"/>
+                            </DataTrigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <DataTemplate x:Key="PadTemplate">
+            <Grid Margin="14,12">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+                <!-- favourite / problem + shortcut -->
+                <StackPanel Grid.Row="0" Orientation="Horizontal" HorizontalAlignment="Left">
+                    <TextBlock Style="{StaticResource Icon}" FontSize="14" Foreground="{StaticResource Accent2Brush}" Margin="0,0,6,0"
+                               Text="{x:Static t:Glyph.StarFill}" Visibility="{Binding Favorite, Converter={StaticResource BoolToVis}}"/>
+                    <TextBlock Style="{StaticResource Icon}" FontSize="14" Foreground="{StaticResource BadBrush}"
+                               Text="&#xE7BA;" Visibility="{Binding HasProblem, Converter={StaticResource BoolToVis}}"/>
+                </StackPanel>
+                <Border Grid.Row="0" HorizontalAlignment="Right" CornerRadius="7" Background="{StaticResource RaisedBrush}" Padding="7,2"
+                        Visibility="{Binding HasShortcut, Converter={StaticResource BoolToVis}}">
+                    <TextBlock Text="{Binding Shortcut}" FontSize="12" FontWeight="SemiBold"/>
+                </Border>
+                <!-- icon + name -->
+                <StackPanel Grid.Row="1" VerticalAlignment="Center" HorizontalAlignment="Stretch">
+                    <TextBlock Text="{Binding Glyph}" Style="{StaticResource Icon}" FontSize="34" Foreground="{Binding TintBrush}" HorizontalAlignment="Center"/>
+                    <TextBlock Text="{Binding Name}" Margin="0,8,0,0" FontSize="15" FontWeight="Medium" HorizontalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                </StackPanel>
+                <!-- duration + status -->
+                <DockPanel Grid.Row="2" Margin="0,2,0,0">
+                    <TextBlock DockPanel.Dock="Left" Text="{Binding DurationText}" FontSize="12" Foreground="{StaticResource MuteBrush}"/>
+                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" HorizontalAlignment="Right">
+                        <TextBlock Text="{Binding StatusText}" FontSize="12" Foreground="{StaticResource MuteBrush}" Margin="0,0,6,0"/>
+                        <TextBlock Text="{Binding ModeGlyph}" Style="{StaticResource Icon}" FontSize="12" Foreground="{StaticResource MuteBrush}"/>
+                    </StackPanel>
+                </DockPanel>
+                <!-- progress -->
+                <ProgressBar Grid.Row="3" Style="{StaticResource Meter}" Height="4" Margin="0,6,0,0" Maximum="1" Value="{Binding Progress, Mode=OneWay}"
+                             Foreground="{StaticResource AccentBrush}" Visibility="{Binding Playing, Converter={StaticResource BoolToVis}}"/>
+            </Grid>
+        </DataTemplate>
+    </UserControl.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <DockPanel Grid.Row="0">
+            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                <Button x:Name="RandomButton" Style="{StaticResource SoftButton}" t:Ui.Icon="&#xE8B1;" Content="Random" Margin="0,0,10,0"
+                        ToolTip="Play a random sound from this view (Ctrl+Shift+R plays a random favourite from anywhere)"/>
+                <Button x:Name="StopAllButton" Style="{StaticResource SoftButton}" t:Ui.Icon="{x:Static t:Glyph.Stop}" Content="Stop all" Margin="0,0,10,0"
+                        ToolTip="Stop every sound that is playing"/>
+                <Button x:Name="AddButton" Style="{StaticResource PrimaryButton}" t:Ui.Icon="{x:Static t:Glyph.Add}" Content="Add Sound"/>
+            </StackPanel>
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Text="{x:Static t:Glyph.Bolt}" Style="{StaticResource Icon}" FontSize="20" Foreground="{StaticResource Accent2Brush}" Margin="0,0,12,0"/>
+                <TextBlock x:Name="Heading" Text="Quick Access" Style="{StaticResource H1}"/>
+            </StackPanel>
+        </DockPanel>
+
+        <WrapPanel x:Name="Filters" Grid.Row="1" Orientation="Horizontal" Margin="0,16,0,6"/>
+
+        <Grid Grid.Row="2" Margin="0,8,0,0">
+            <ListBox x:Name="Pads" ItemTemplate="{StaticResource PadTemplate}" ItemContainerStyle="{StaticResource PadItem}"
+                     Background="Transparent" BorderThickness="0" Padding="0,4,4,8" Foreground="{StaticResource InkBrush}"
+                     ScrollViewer.HorizontalScrollBarVisibility="Disabled" VirtualizingPanel.IsVirtualizing="False" SelectionMode="Extended"
+                     AutomationProperties.Name="Sound pads">
+                <ListBox.ItemsPanel>
+                    <ItemsPanelTemplate><c:AdaptiveGrid MinItemWidth="172" ItemHeight="140" Spacing="16"/></ItemsPanelTemplate>
+                </ListBox.ItemsPanel>
+            </ListBox>
+            <StackPanel x:Name="Empty" VerticalAlignment="Top" HorizontalAlignment="Center" Margin="0,48,0,0" Visibility="Collapsed">
+                <TextBlock x:Name="EmptyIcon" Text="{x:Static t:Glyph.Search}" Style="{StaticResource Icon}" FontSize="30" Foreground="{StaticResource MuteBrush}" HorizontalAlignment="Center"/>
+                <TextBlock x:Name="EmptyTitle" Margin="0,12,0,0" FontSize="16" FontWeight="SemiBold" HorizontalAlignment="Center"/>
+                <TextBlock x:Name="EmptyText" Margin="0,4,0,0" Foreground="{StaticResource MuteBrush}" HorizontalAlignment="Center" TextAlignment="Center"/>
+            </StackPanel>
+            <!-- Drop target highlight -->
+            <Border x:Name="DropHint" Visibility="Collapsed" CornerRadius="16" BorderThickness="2" BorderBrush="{StaticResource AccentBrush}"
+                    Background="#26181716" IsHitTestVisible="False">
+                <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                    <TextBlock Text="{x:Static t:Glyph.Add}" Style="{StaticResource Icon}" FontSize="30" Foreground="{StaticResource AccentBrush}" HorizontalAlignment="Center"/>
+                    <TextBlock Text="Drop to add to your soundboard" Margin="0,10,0,0" FontSize="16" HorizontalAlignment="Center"/>
+                </StackPanel>
+            </Border>
+        </Grid>
+    </Grid>
+</UserControl>

@@ -2,10 +2,10 @@ using System.Diagnostics;
 using System.IO;
 using System.Text.Json;
 using System.Windows;
-using BreadBoard.App.Lifecycle;
-using BreadBoard.App.Navigation;
 using BreadBoard.Core;
 using BreadBoard.Core.Logging;
+using BreadBoard.App.Services;
+using BreadBoard.App.Shell;
 
 namespace BreadBoard.App.Diagnostics;
 
@@ -34,7 +34,7 @@ public static class SmokeTest
         host.Navigation.Navigate(PageId.Shortcuts); // so the next launch can verify it was remembered
 
         // Mini-player: opens, honours the always-on-top setting, closes cleanly.
-        var main = (Views.MainWindow)window;
+        var main = (MainWindow)window;
         main.ShowMini();
         await Task.Delay(100).ConfigureAwait(true);
         var miniOpened = main.MiniPlayer is not null;
@@ -56,7 +56,6 @@ public static class SmokeTest
             miniTopmost,
             audioCreated = host.AudioCreated,
             hotkeysCreated = host.HotkeysCreated,
-            webView2Loaded = AppDomain.CurrentDomain.GetAssemblies().Any(a => a.GetName().Name?.Contains("WebView2", StringComparison.OrdinalIgnoreCase) == true),
         };
         await File.WriteAllTextAsync(Path.Combine(AppPaths.Roaming, "smoke-result.json"), JsonSerializer.Serialize(result)).ConfigureAwait(true);
         Log.Info("Smoke test finished; closing");
@@ -72,8 +71,8 @@ public static class SmokeTest
         var item = added.Count == 1 ? added[0] : null;
         if (item is null) return new { imported = false };
 
-        await sb.SetSoundHotkeyAsync(item.Id, "Ctrl+Alt+Shift+F24").ConfigureAwait(true);
-        var hotkey = sb.Hotkeys.FirstOrDefault(h => h.OwnerKey == $"sound:{item.Id}");
+        await sb.SetHotkeyAsync(Core.Hotkeys.HotkeyRules.SoundOwner(item.Id), "Ctrl+Alt+Shift+F24").ConfigureAwait(true);
+        var hotkey = sb.HotkeyFor(Core.Hotkeys.HotkeyRules.SoundOwner(item.Id));
 
         sb.Press(item.Id);
         var played = await WaitAsync(() => item.Playing, 1500).ConfigureAwait(true);
@@ -113,7 +112,7 @@ public static class SmokeTest
 
         // Route one sound to headphones only and give it a shortcut in this profile.
         var e = sb.Library.Find(added[0].Id)!;
-        await sb.SaveAsync(e.Id, new Services.SoundEdit(e.Name, e.Category, "Ctrl+Alt+Shift+F23", e.Mode, 5, e.Favorite, e.Icon, e.Tint, Core.Models.SoundRoute.MonitorOnly)).ConfigureAwait(true);
+        await sb.SaveAsync(e.Id, SoundEdit.From(e) with { Hotkey = "Ctrl+Alt+Shift+F23", Volume = 5, Route = Core.Models.SoundRoute.MonitorOnly }).ConfigureAwait(true);
         var random = sb.PlayRandom([seq!]);
         var randomPlayed = await WaitAsync(() => seq!.Playing, 1500).ConfigureAwait(true);
         sb.StopAll();

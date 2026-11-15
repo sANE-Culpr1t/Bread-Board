@@ -1,3 +1,5 @@
+using BreadBoard.Core.Models;
+
 namespace BreadBoard.Audio.Dsp;
 
 /// <summary>
@@ -11,8 +13,8 @@ public sealed class ChannelStrip
     private float _currentGain = 1f;
     private float _peak;
 
-    /// <summary>Linear gain, 0–1 (UI percent / 100).</summary>
-    public float Gain { get => _targetGain; set => _targetGain = Math.Clamp(value, 0f, 2f); }
+    /// <summary>Linear gain (UI percent / 100), up to <see cref="ChannelSettings.MaxGain"/> %.</summary>
+    public float Gain { get => _targetGain; set => _targetGain = Math.Clamp(value, 0f, ChannelSettings.MaxGain / 100f); }
     public bool Muted { get => _muted; set => _muted = value; }
 
     /// <summary>Highest absolute sample since the last call (0–1+). Resets on read.</summary>

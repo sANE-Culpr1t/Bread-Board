@@ -19,7 +19,6 @@ public sealed class FloatRingBuffer
         _mask = cap - 1;
     }
 
-    public int Capacity => _buffer.Length;
     public int Count => (int)(Volatile.Read(ref _write) - Volatile.Read(ref _read));
 
     /// <summary>Producer: writes as much as fits; excess is dropped (consumer is stalled).</summary>

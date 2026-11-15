@@ -1,4 +1,4 @@
-﻿using BreadBoard.Core.Logging;
+using BreadBoard.Core.Logging;
 using BreadBoard.Core.Models;
 
 namespace BreadBoard.Core.Config;
@@ -9,15 +9,15 @@ namespace BreadBoard.Core.Config;
 /// </summary>
 public static class ProfileService
 {
-    public static readonly string[] Names = ["General use", "Gaming", "Streaming", "Custom"];
+    public static readonly (string Name, string Description)[] All =
+    [
+        ("General use", "Everyday calls and chat"),
+        ("Gaming", "In-game voice: shortcuts you can reach mid-game"),
+        ("Streaming", "Stream audio: app audio, ducking, careful levels"),
+        ("Custom", "Anything else"),
+    ];
 
-    public static readonly IReadOnlyDictionary<string, string> Descriptions = new Dictionary<string, string>
-    {
-        ["General use"] = "Everyday calls and chat",
-        ["Gaming"] = "In-game voice: shortcuts you can reach mid-game",
-        ["Streaming"] = "Stream audio: app audio, ducking, careful levels",
-        ["Custom"] = "Anything else",
-    };
+    public static readonly string[] Names = [.. All.Select(p => p.Name)];
 
     /// <summary>Creates any missing default profiles from the current settings.</summary>
     public static void EnsureDefaults(AppConfig c)
@@ -49,7 +49,7 @@ public static class ProfileService
     /// <summary>Applies <paramref name="p"/> to the live settings. Sounds the profile doesn't know keep no shortcut.</summary>
     public static void Apply(AppConfig c, Profile p)
     {
-        var copy = Clone(p);
+        var copy = ConfigStore.Clone(p);
         c.Channels = copy.Channels;
         c.Processing = copy.Processing;
         c.Hotkeys = copy.Hotkeys;
@@ -76,9 +76,4 @@ public static class ProfileService
         Log.Info($"Profile switched to {name}");
     }
 
-    private static Profile Clone(Profile p)
-    {
-        var holder = new AppConfig { Profiles = [p] };
-        return ConfigStore.Clone(holder).Profiles[0];
-    }
 }

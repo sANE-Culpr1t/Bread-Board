@@ -1,3 +1,4 @@
+using BreadBoard.Core.Sounds;
 using NAudio.Wave;
 using NAudio.Wave.SampleProviders;
 using NVorbis;
@@ -17,7 +18,8 @@ public sealed class SoundClip(string id, float[] samples)
 public static class SoundLoader
 {
     /// <summary>Hard cap so a huge file can't exhaust memory (10 minutes ≈ 230 MB is too much; 3 min ≈ 70 MB).</summary>
-    public static TimeSpan MaxLength { get; set; } = TimeSpan.FromMinutes(3);
+    public static readonly TimeSpan MaxLength = TimeSpan.FromMinutes(3);
+    public static readonly int MaxSamples = (int)(MaxLength.TotalSeconds * AudioFormat.SampleRate * AudioFormat.Channels);
 
     public static SoundClip Load(string id, string path)
     {
@@ -27,7 +29,7 @@ public static class SoundLoader
         {
             ".ogg" => LoadVorbis(id, path),
             ".wav" or ".mp3" => LoadMediaFoundation(id, path),
-            _ => throw new NotSupportedException($"Unsupported audio format '{ext}'. Use WAV, MP3 or OGG."),
+            _ => throw new NotSupportedException($"Unsupported audio format '{ext}'. Use {AudioFiles.Description}."),
         };
     }
 
@@ -50,14 +52,13 @@ public static class SoundLoader
         else if (p.WaveFormat.Channels > 2) p = new MultiplexingSampleProvider([p], 2);
         if (p.WaveFormat.SampleRate != AudioFormat.SampleRate) p = new WdlResamplingSampleProvider(p, AudioFormat.SampleRate);
 
-        var max = (int)(MaxLength.TotalSeconds * AudioFormat.SampleRate * AudioFormat.Channels);
-        var buffer = new float[AudioFormat.SampleRate * AudioFormat.Channels]; // 0.5 s chunks
+        var buffer = new float[AudioFormat.SamplesFor(1000)];
         var output = new List<float>(buffer.Length * 4);
         int n;
         while ((n = p.Read(buffer.AsSpan())) > 0)
         {
             output.AddRange(buffer.AsSpan(0, n));
-            if (output.Count >= max) break;
+            if (output.Count >= MaxSamples) break;
         }
         if (output.Count % 2 != 0) output.RemoveAt(output.Count - 1);
         return new SoundClip(id, [.. output]);
@@ -77,8 +78,7 @@ public static class SequenceBuilder
     {
         var gap = AudioFormat.SamplesFor(gapMs);
         var total = parts.Sum(p => p.Clip.Samples.Length) + gap * Math.Max(0, parts.Count - 1);
-        var max = (int)(SoundLoader.MaxLength.TotalSeconds * AudioFormat.SampleRate * AudioFormat.Channels);
-        var data = new float[Math.Min(total, max)];
+        var data = new float[Math.Min(total, SoundLoader.MaxSamples)];
         var pos = 0;
         for (var i = 0; i < parts.Count && pos < data.Length; i++)
         {

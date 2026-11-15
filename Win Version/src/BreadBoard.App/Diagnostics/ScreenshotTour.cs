@@ -3,10 +3,11 @@ using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
-using BreadBoard.App.Lifecycle;
-using BreadBoard.App.Navigation;
-using BreadBoard.App.Views;
 using BreadBoard.Core.Logging;
+using BreadBoard.App.Mixer;
+using BreadBoard.App.Services;
+using BreadBoard.App.Shell;
+using BreadBoard.App.Soundboard;
 
 namespace BreadBoard.App.Diagnostics;
 
@@ -55,13 +56,13 @@ public static class ScreenshotTour
 
         foreach (var (name, id) in new[] { ("6-AddSound", (string?)null), ("7-EditSound", host.Soundboard.Items.FirstOrDefault()?.Id) })
         {
-            var dlg = Views.Dialogs.SoundEditorDialog.Preview(host.Soundboard, id);
+            var dlg = SoundEditorDialog.Preview(host.Soundboard, id);
             dlg.Show();
             await Settle().ConfigureAwait(true);
             Save(dlg, Path.Combine(dir, $"{name}.png"));
             dlg.Close();
         }
-        var picker = Views.Dialogs.AppPickerDialog.Preview(host.Soundboard);
+        var picker = AppPickerDialog.Preview(host.Soundboard);
         picker.Show();
         await Task.Delay(1500).ConfigureAwait(true); // apps are listed on a worker thread
         await Settle().ConfigureAwait(true);
@@ -94,7 +95,7 @@ public static class ScreenshotTour
         {
             var wav = SmokeTest.WriteTone(Path.Combine(src, s.Name.Replace(' ', '_') + ".wav"), s.Secs, amplitude: 0); // silent: screenshots make no noise
             if (await sb.ImportFilesAsync([wav], s.Cat).ConfigureAwait(true) is [var item, ..])
-                await sb.SaveAsync(item.Id, new Services.SoundEdit(s.Name, s.Cat, s.Key, s.Mode, 80, s.Fav, s.Icon, s.Tint, s.Name == "Applause" ? Core.Models.SoundRoute.MicOnly : Core.Models.SoundRoute.Both)).ConfigureAwait(true);
+                await sb.SaveAsync(item.Id, new SoundEdit(s.Name, s.Cat, s.Key, s.Mode, 80, s.Fav, s.Icon, s.Tint, s.Name == "Applause" ? Core.Models.SoundRoute.MicOnly : Core.Models.SoundRoute.Both)).ConfigureAwait(true);
         }
         // One sound whose file has gone missing.
         var missing = sb.Library.Add(Path.Combine(src, "deleted.wav"), "Old Intro", "Music", null);

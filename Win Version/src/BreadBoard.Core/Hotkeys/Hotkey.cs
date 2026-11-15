@@ -5,7 +5,7 @@ namespace BreadBoard.Core.Hotkeys;
 [Flags]
 public enum HotkeyModifiers { None = 0, Ctrl = 1, Alt = 2, Shift = 4, Win = 8 }
 
-/// <summary>A parsed shortcut such as "Ctrl+Shift+S" or "Num5". Same text format as the prototype.</summary>
+/// <summary>A parsed shortcut such as "Ctrl+Shift+S" or "Num5".</summary>
 public readonly record struct Hotkey(HotkeyModifiers Modifiers, string Key)
 {
     public static bool TryParse(string? text, out Hotkey hotkey)
@@ -43,7 +43,10 @@ public readonly record struct Hotkey(HotkeyModifiers Modifiers, string Key)
     }
 }
 
-public sealed record HotkeyOwner(string Key, string Label, string Combo);
+internal sealed record HotkeyOwner(string Key, string Label, string Combo);
+
+/// <summary>An app-wide shortcut and where its combination is saved.</summary>
+public sealed record GlobalShortcut(string Key, string Label, Func<AppConfig, string?> Get, Action<AppConfig, string?> Set);
 
 /// <summary>Reserved-shortcut and duplicate rules shared by the UI and hotkey registration.</summary>
 public static class HotkeyRules
@@ -65,16 +68,38 @@ public static class HotkeyRules
         return hk.Modifiers.HasFlag(HotkeyModifiers.Win) ? "Windows reserves most Win-key shortcuts" : null;
     }
 
-    public static IReadOnlyList<HotkeyOwner> Owners(AppConfig cfg)
+    public const string StopAll = "global:stopAll", ToggleMini = "global:toggleMini", RandomSound = "global:random",
+        MuteMic = "global:muteMic", PushToTalk = "global:ptt";
+
+    /// <summary>Every app-wide shortcut, in the order the Shortcuts page lists them.</summary>
+    public static readonly GlobalShortcut[] Globals =
+    [
+        new(StopAll, "Stop all sounds", c => c.Hotkeys.StopAll, (c, v) => c.Hotkeys.StopAll = v),
+        new(ToggleMini, "Toggle mini-player", c => c.Hotkeys.ToggleMini, (c, v) => c.Hotkeys.ToggleMini = v),
+        new(RandomSound, "Play a random sound", c => c.Hotkeys.RandomSound, (c, v) => c.Hotkeys.RandomSound = v),
+        new(MuteMic, "Mute microphone", c => c.Hotkeys.MuteMic, (c, v) => c.Hotkeys.MuteMic = v),
+        new(PushToTalk, "Push-to-talk", c => c.Processing.PushToTalk.Key, (c, v) => c.Processing.PushToTalk.Key = v),
+    ];
+
+    public static GlobalShortcut Global(string key) =>
+        Array.Find(Globals, g => g.Key == key) ?? throw new ArgumentOutOfRangeException(nameof(key), key);
+
+    public static string SoundOwner(string soundId) => "sound:" + soundId;
+
+    public static bool TrySoundId(string ownerKey, out string soundId)
+    {
+        var ok = ownerKey.StartsWith("sound:", StringComparison.Ordinal);
+        soundId = ok ? ownerKey["sound:".Length..] : "";
+        return ok;
+    }
+
+    private static List<HotkeyOwner> Owners(AppConfig cfg)
     {
         var list = new List<HotkeyOwner>();
         foreach (var s in cfg.Sounds)
-            if (Norm(s.Hotkey) is { } c) list.Add(new($"sound:{s.Id}", s.Name, c));
-        if (Norm(cfg.Hotkeys.StopAll) is { } a) list.Add(new("global:stopAll", "Stop all sounds", a));
-        if (Norm(cfg.Hotkeys.MuteMic) is { } b) list.Add(new("global:muteMic", "Mute microphone", b));
-        if (Norm(cfg.Hotkeys.ToggleMini) is { } m) list.Add(new("global:toggleMini", "Toggle mini-player", m));
-        if (Norm(cfg.Hotkeys.RandomSound) is { } r) list.Add(new("global:random", "Play a random sound", r));
-        if (Norm(cfg.Processing.PushToTalk.Key) is { } p) list.Add(new("global:ptt", "Push-to-talk", p));
+            if (Norm(s.Hotkey) is { } c) list.Add(new(SoundOwner(s.Id), s.Name, c));
+        foreach (var g in Globals)
+            if (Norm(g.Get(cfg)) is { } c) list.Add(new(g.Key, g.Label, c));
         return list;
     }
 
@@ -87,9 +112,6 @@ public static class HotkeyRules
         var clash = Owners(cfg).FirstOrDefault(o => o.Combo == text && o.Key != ownerKey);
         return clash is null ? null : $"{text} is already used by “{clash.Label}”.";
     }
-
-    public static IReadOnlySet<string> Duplicates(AppConfig cfg) =>
-        Owners(cfg).GroupBy(o => o.Combo).Where(g => g.Count() > 1).Select(g => g.Key).ToHashSet();
 
     private static string? Norm(string? combo) => Hotkey.TryParse(combo, out var hk) ? hk.ToString() : null;
 }

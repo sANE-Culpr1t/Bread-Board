@@ -10,7 +10,6 @@ public static class AppPaths
     private static string _local = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "BreadBoard");
 
     public static string Roaming => _roaming;
-    public static string Local => _local;
     public static string ConfigFile => Path.Combine(_roaming, "config.json");
     public static string SoundLibrary => Path.Combine(_local, "Sounds");
     public static string Logs => Path.Combine(_local, "Logs");

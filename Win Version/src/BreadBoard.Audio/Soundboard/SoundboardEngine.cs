@@ -50,8 +50,6 @@ public sealed class SoundboardEngine
     /// <summary>The decoded clip of a registered sound (used to build sequences).</summary>
     public SoundClip? GetClip(string id) => _entries.TryGetValue(id, out var e) ? e.Clip : null;
 
-    public bool IsRegistered(string id) => _entries.ContainsKey(id);
-
     /// <summary>0–1 position of the sound's newest voice; meaningful while it is in <see cref="Playing"/>.</summary>
     public double GetProgress(string id) =>
         _entries.TryGetValue(id, out var e) && e.Clip.Samples.Length > 0 ? (double)e.Position / e.Clip.Samples.Length : 0;
@@ -74,20 +72,15 @@ public sealed class SoundboardEngine
     public void Stop(string id) => _commands.Enqueue(new(CmdKind.Stop, id));
     public void StopAll() => _commands.Enqueue(new(CmdKind.StopAll, null));
 
-    /// <summary>Audio thread: mixes every active voice into <paramref name="output"/> (overwrites it), ignoring routing.</summary>
-    public void Render(Span<float> output) => Render(output, []);
-
     /// <summary>
     /// Audio thread: mixes voices into the virtual-mic bus (<paramref name="main"/>) and the headphones bus
-    /// (<paramref name="monitor"/>) according to each sound's route. Both are overwritten. With an empty
-    /// monitor span every voice goes to <paramref name="main"/>.
+    /// (<paramref name="monitor"/>, same length) according to each sound's route. Both are overwritten.
     /// </summary>
     public void Render(Span<float> main, Span<float> monitor)
     {
         var changed = ApplyCommands();
         main.Clear();
         monitor.Clear();
-        var split = monitor.Length == main.Length;
         for (var v = 0; v < _voices.Count; v++) _voices[v].Entry.Position = _voices[v].Position; // oldest first, newest wins
         for (var v = _voices.Count - 1; v >= 0; v--)
         {
@@ -95,8 +88,8 @@ public sealed class SoundboardEngine
             var src = voice.Entry.Clip.Samples;
             var vol = voice.Entry.Volume;
             var route = voice.Entry.Route;
-            var toMain = !split || route != SoundRoute.MonitorOnly;
-            var toMon = split && route != SoundRoute.MicOnly;
+            var toMain = route != SoundRoute.MonitorOnly;
+            var toMon = route != SoundRoute.MicOnly;
             var i = 0;
             while (i < main.Length)
             {
@@ -166,7 +159,7 @@ public sealed class SoundboardEngine
                 _voices.RemoveAll(v => ReferenceEquals(v.Entry, e));
                 break;
         }
-        while (_voices.Count >= _maxVoices) _voices.RemoveAt(0); // drop the oldest voice
+        while (_voices.Count >= _maxVoices) _voices.RemoveAt(0);
         _voices.Add(new Voice(e, e.Mode is PlayMode.Loop or PlayMode.Hold));
         return true;
     }

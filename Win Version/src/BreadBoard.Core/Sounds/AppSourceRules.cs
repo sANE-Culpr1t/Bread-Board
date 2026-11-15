@@ -14,7 +14,7 @@ public static class AppSourceRules
     /// <summary>Null if <paramref name="processName"/> may be captured; otherwise why not.</summary>
     public static string? Blocked(string processName)
     {
-        var name = Normalize(processName);
+        var name = BaseName(processName);
         if (name.Equals("breadboard", StringComparison.OrdinalIgnoreCase))
             return "Bread Board can't capture itself; it would echo forever.";
         if (name.Equals("audiodg", StringComparison.OrdinalIgnoreCase) || name.StartsWith("voicemeeter", StringComparison.OrdinalIgnoreCase))
@@ -24,10 +24,11 @@ public static class AppSourceRules
 
     /// <summary>Warning shown before capturing an app that plays other people's voices.</summary>
     public static string? Warning(string processName) =>
-        VoiceChat.TryGetValue(Normalize(processName), out var app)
+        VoiceChat.TryGetValue(BaseName(processName), out var app)
             ? $"{app} plays other people's voices. Capturing it sends them back into your mic, so they'd hear themselves."
             : null;
 
-    private static string Normalize(string name) =>
-        name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) ? name[..^4] : name;
+    /// <summary>"Discord.exe" and "Discord" name the same app.</summary>
+    public static string BaseName(string processName) =>
+        processName.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) ? processName[..^4] : processName;
 }

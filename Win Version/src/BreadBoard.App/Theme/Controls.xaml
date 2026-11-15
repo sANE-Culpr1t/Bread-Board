@@ -575,8 +575,8 @@
         </Setter>
     </Style>
 
-    <!-- "Arrives in Iteration N" chip for controls that aren't wired yet. -->
-    <Style x:Key="PendingChip" TargetType="Border">
+    <!-- Small status chip (PageKit.Chip). -->
+    <Style x:Key="StatusChip" TargetType="Border">
         <Setter Property="Background" Value="#1FD9A35B"/>
         <Setter Property="BorderBrush" Value="#4DD9A35B"/>
         <Setter Property="BorderThickness" Value="1"/>

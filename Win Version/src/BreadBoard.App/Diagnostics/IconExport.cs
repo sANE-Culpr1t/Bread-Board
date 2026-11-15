@@ -6,8 +6,8 @@ using System.Windows.Media.Imaging;
 namespace BreadBoard.App.Diagnostics;
 
 /// <summary>
-/// --export-icon PATH [--export-png DIR]: renders the vector logo (Theme/Logo.xaml) into a multi-size
-/// Windows .ico (PNG-compressed frames) and optional PNGs. No window is shown. Used to (re)build Assets/BreadBoard.ico.
+/// --export-icon PATH [--export-png DIR]: renders the logo (Theme/Logo.xaml) into a multi-size Windows .ico
+/// (PNG-compressed frames) and optional PNGs. No window is shown. Used to (re)build Assets/BreadBoard.ico.
 /// </summary>
 public static class IconExport
 {

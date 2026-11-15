@@ -38,29 +38,17 @@ public static class Glyph
     public const string Next = "";
     public const string Mic = "";
     public const string MicOff = "";
-    public const string Volume = "";
     public const string Mute = "";
     public const string Pin = "";
-    public const string Unpin = "";
     public const string Star = "";
     public const string StarFill = "";
     public const string Game = "";
     public const string App = "";
     public const string Bolt = "";
-    public const string Clock = "";
-    public const string Repeat = "";
-    public const string Headphones = "";
     public const string Close = "";
     public const string Minimize = "";
     public const string Maximize = "";
     public const string Restore = "";
-    public const string Info = "";
     public const string Waveform = "";
 }
 
-/// <summary>Level meters.</summary>
-public static class Meter
-{
-    /// <summary>Peak (linear) → 0–1 on a −60…0 dB scale, so quiet voices still move the meter.</summary>
-    public static double Db(float peak) => peak <= 1e-6f ? 0 : Math.Clamp((20 * Math.Log10(peak) + 60) / 60, 0, 1);
-}

@@ -24,12 +24,10 @@ public static class Log
     private static string? _dir;
     private static Task? _writer;
 
-    public static LogLevel MinLevel { get; set; } = LogLevel.Info;
 
     /// <summary>Also echo human-readable lines to this sink (e.g. Console.Error).</summary>
     public static Action<string>? Echo { get; set; }
 
-    public static string? Directory => _dir;
 
     public static void Init(string directory)
     {
@@ -46,7 +44,7 @@ public static class Log
 
     private static void Write(LogLevel level, string msg, Exception? ex, string file)
     {
-        if (level < MinLevel) return;
+        if (level < LogLevel.Info) return;
         var e = new Entry(DateTimeOffset.Now, level, Path.GetFileNameWithoutExtension(file), msg, Environment.CurrentManagedThreadId, ex);
         Echo?.Invoke($"{e.Time:HH:mm:ss.fff} {level.ToString().ToUpperInvariant(),-5} [{e.Category}] {msg}{(ex is null ? "" : $" | {ex.GetType().Name}: {ex.Message}")}");
         Idle.Reset();
@@ -108,16 +106,6 @@ public static class Log
             foreach (var f in System.IO.Directory.EnumerateFiles(dir, "breadboard-*.*"))
                 if (File.GetLastWriteTime(f) < DateTime.Now.AddDays(-7)) File.Delete(f);
         }
-        catch (IOException) { }
-    }
-
-    /// <summary>Readable form of a JSON-lines entry (used by tooling and tests).</summary>
-    public static string Describe(string jsonLine)
-    {
-        using var doc = JsonDocument.Parse(jsonLine);
-        var r = doc.RootElement;
-        var sb = new StringBuilder();
-        sb.Append(r.GetProperty("lvl").GetString()).Append(" [").Append(r.GetProperty("cat").GetString()).Append("] ").Append(r.GetProperty("msg").GetString());
-        return sb.ToString();
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { } // old logs stay; harmless
     }
 }

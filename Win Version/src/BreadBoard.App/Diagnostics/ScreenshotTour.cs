@@ -28,6 +28,8 @@ public static class ScreenshotTour
             await host.Soundboard.SelectAppAsync(playing).ConfigureAwait(true); // show the App Audio strip live
 
         window.WindowState = WindowState.Normal;
+        await Task.Delay(500).ConfigureAwait(true);
+        window.HideToast(); // screenshots show the pages, not the startup messages
         foreach (var (width, height, suffix) in new[] { (1440.0, 900.0, "wide"), (960.0, 720.0, "compact") })
         {
             window.Width = width;
@@ -41,6 +43,11 @@ public static class ScreenshotTour
         }
 
         window.Width = 1440;
+        host.Navigation.Navigate(PageId.Mixer);
+        await Settle().ConfigureAwait(true);
+        if (FindScroll(window.PageHost) is { } sv) sv.ScrollToEnd();
+        await Settle().ConfigureAwait(true);
+        Save(window, Path.Combine(dir, "2b-Mixer-devices.png"));
         host.Navigation.Navigate(PageId.Soundboard);
         window.ShowMini();
         await Settle().ConfigureAwait(true);
@@ -107,6 +114,14 @@ public static class ScreenshotTour
         w.Write("data"u8); w.Write(n * 2);
         w.Write(new byte[n * 2]);
         return path;
+    }
+
+    private static System.Windows.Controls.ScrollViewer? FindScroll(DependencyObject root)
+    {
+        if (root is System.Windows.Controls.ScrollViewer sv) return sv;
+        for (var i = 0; i < VisualTreeHelper.GetChildrenCount(root); i++)
+            if (FindScroll(VisualTreeHelper.GetChild(root, i)) is { } found) return found;
+        return null;
     }
 
     private static async Task Settle()

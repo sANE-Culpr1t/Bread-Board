@@ -1,167 +1,105 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using System.Windows.Media;
+using System.Windows.Shapes;
 using BreadBoard.App.Services;
 using BreadBoard.App.Theme;
 using BreadBoard.App.Views.Dialogs;
 using BreadBoard.Audio;
-using BreadBoard.Core.Config;
+using BreadBoard.Audio.Devices;
 using BreadBoard.Core.Models;
 using static BreadBoard.App.Views.Pages.PageKit;
 
 namespace BreadBoard.App.Views.Pages;
 
 /// <summary>
-/// Mixer: four channel strips, processing and devices. The App Audio strip is live (Iteration 3);
-/// microphone, soundboard/master faders, processing and devices go live in Iteration 4 and say so.
+/// The live mixer: four channel strips (microphone, chosen app, soundboard, master), voice processing,
+/// and device choices. Everything applies immediately; levels are shown in dB.
 /// </summary>
 public sealed class MixerPage : UserControl
 {
     private readonly SoundboardController _sb;
+    private readonly List<Action> _refreshers = [];
+    private bool _filling;
+    private readonly Dictionary<DeviceKind, IReadOnlyList<AudioDeviceInfo>> _deviceCache = [];
 
-    public MixerPage(ConfigService config, SoundboardController sb)
+    public MixerPage(SoundboardController sb)
     {
         _sb = sb;
-        var c = config.Current;
         var root = new StackPanel();
-        root.Children.Add(Header("Mixer", "Microphone, an app of your choice and the soundboard, mixed into one virtual microphone."));
-        root.Children.Add(Pending("App Audio is live · microphone, master, processing and devices go live in Iteration 4"));
+        root.Children.Add(Header("Mixer", "Your microphone, an app of your choice and the soundboard, mixed into one virtual microphone."));
 
-        var strips = new UniformGrid { Rows = 1, Margin = new Thickness(0, 16, 0, 0) };
-        strips.Children.Add(Strip("Microphone", Glyph.Mic, "Physical input", c.Channels.Mic, null));
-        strips.Children.Add(AppStrip(c.Channels.App));
-        strips.Children.Add(Strip("Soundboard", Glyph.Grid, "Your sounds", c.Channels.Soundboard, null));
-        strips.Children.Add(Strip("Master", Glyph.Waveform, "To the virtual mic", c.Channels.Master, null, master: true));
+        var strips = new UniformGrid { Rows = 1, Margin = new Thickness(0, 4, 0, 0) };
+        strips.Children.Add(Strip(MixChannel.Mic, "Microphone", Glyph.Mic, MicSlot()));
+        strips.Children.Add(Strip(MixChannel.App, "App Audio", Glyph.App, AppSlot()));
+        strips.Children.Add(Strip(MixChannel.Soundboard, "Soundboard", Glyph.Grid, BoardSlot()));
+        strips.Children.Add(Strip(MixChannel.Master, "Master", Glyph.Waveform, MasterSlot()));
         root.Children.Add(strips);
 
-        root.Children.Add(SectionTitle("Processing"));
+        root.Children.Add(SectionTitle("Voice processing"));
         var proc = new UniformGrid { Rows = 1 };
-        var p = c.Processing;
-        proc.Children.Add(Processor("Noise gate", "Silences the mic below a threshold", p.NoiseGate.Enabled, p.NoiseGate.Value, "%"));
-        proc.Children.Add(Processor("Compressor", "Evens out loud peaks", p.Compressor.Enabled, p.Compressor.Value, "%"));
-        proc.Children.Add(Processor("Limiter", "Ceiling on the master output", p.Limiter.Enabled, p.Limiter.Value, "%"));
-        proc.Children.Add(Processor("Voice ducking", "Lowers app audio while you talk", p.Ducking.Enabled, p.Ducking.Value, "%"));
+        proc.Children.Add(ProcessorCard(Processor.NoiseGate, "Noise gate", "Silences the mic below this level (keyboard, fans)", 0, 30, "%"));
+        proc.Children.Add(ProcessorCard(Processor.Compressor, "Compressor", "Evens out loud and quiet speech", 0, 100, "%"));
+        proc.Children.Add(ProcessorCard(Processor.Limiter, "Limiter", "Ceiling on the virtual mic: no clipping", 50, 100, "%"));
+        proc.Children.Add(ProcessorCard(Processor.Ducking, "Voice ducking", "Lowers app audio while you talk", 0, 100, "%"));
         root.Children.Add(proc);
 
         root.Children.Add(SectionTitle("Devices"));
-        var devices = new UniformGrid { Rows = 1 };
-        devices.Children.Add(DeviceField("Microphone input", "System default microphone"));
-        devices.Children.Add(DeviceField("Virtual mic output", "VB-Audio Virtual Cable (auto-detected)"));
-        devices.Children.Add(DeviceField("Monitor (your headphones)", "Off"));
-        root.Children.Add(Card(devices, new Thickness(20, 16, 20, 18)));
+        root.Children.Add(DevicesCard());
 
         Content = Scroll(root);
+        _sb.EngineChanged += RefreshAll;
+        _sb.MixChanged += RefreshAll;
+        _sb.DevicesListChanged += () => { _deviceCache.Clear(); RefreshAll(); };
+        _sb.PushToTalkChanged += _ => RefreshAll();
+        RefreshAll();
     }
 
-    private static Border Strip(string name, string glyph, string desc, ChannelSettings s, FrameworkElement? extra, bool master = false)
+    private void RefreshAll()
     {
-        var p = new StackPanel { HorizontalAlignment = HorizontalAlignment.Stretch };
+        _filling = true;
+        try { foreach (var r in _refreshers) r(); }
+        finally { _filling = false; }
+    }
+
+    private static Brush Res(string key) => (Brush)Application.Current.FindResource(key);
+
+    /// <summary>Peak (linear) → 0–1 on a −60…0 dB scale, so quiet voices still move the meter.</summary>
+    public static double Db(float peak) => peak <= 1e-6f ? 0 : Math.Clamp((20 * Math.Log10(peak) + 60) / 60, 0, 1);
+
+    // ---- channel strips -----------------------------------------------------------------
+
+    private Border Strip(MixChannel ch, string title, string glyph, FrameworkElement slot)
+    {
+        var s = SoundboardController.Settings(_sb.Config, ch);
+        var p = new StackPanel();
         var head = new StackPanel { Orientation = Orientation.Horizontal };
         head.Children.Add(Icon(glyph, 18, "Accent2Brush"));
         var titles = new StackPanel { Margin = new Thickness(10, 0, 0, 0) };
-        titles.Children.Add(Text(name, 15, weight: FontWeights.SemiBold));
-        titles.Children.Add(Text(desc, 12, muted: true));
-        head.Children.Add(titles);
-        p.Children.Add(head);
-        // Same-height slot in every strip so the faders line up even though only App Audio has a picker.
-        var slot = extra ?? new Border();
-        slot.Height = 40;
-        slot.Margin = new Thickness(0, 12, 0, 0);
-        p.Children.Add(slot);
-
-        var faderRow = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 18, 0, 0) };
-        faderRow.Children.Add(new Slider
-        {
-            Orientation = Orientation.Vertical, Height = 170, Minimum = 0, Maximum = 200, Value = s.Gain,
-            IsEnabled = false, ToolTip = "Gain control goes live in Iteration 4.",
-        });
-        faderRow.Children.Add(new ProgressBar
-        {
-            Style = (Style)Application.Current.FindResource("Meter"), Orientation = Orientation.Vertical,
-            Width = 6, Height = 170, Value = 0, Margin = new Thickness(14, 0, 0, 0), ToolTip = "Level meter (Iteration 4)",
-        });
-        p.Children.Add(faderRow);
-        var value = Text($"{s.Gain}%", 22, weight: FontWeights.SemiBold);
-        value.HorizontalAlignment = HorizontalAlignment.Center;
-        value.Margin = new Thickness(0, 12, 0, 12);
-        p.Children.Add(value);
-
-        var mute = PageKit.Button("Mute", glyph: master ? Glyph.Mute : name == "Microphone" ? Glyph.MicOff : Glyph.Mute, enabled: false,
-            tooltip: "Mute goes live in Iteration 4.");
-        mute.HorizontalAlignment = HorizontalAlignment.Stretch;
-        p.Children.Add(mute);
-
-        var routing = new StackPanel { Margin = new Thickness(0, 14, 0, 0) };
-        if (!master) routing.Children.Add(Routing("To virtual mic", s.ToVirtualMic));
-        routing.Children.Add(Routing("Monitor", s.ToMonitor));
-        p.Children.Add(routing);
-
-        var card = Card(p, new Thickness(18, 18, 18, 16));
-        card.Margin = new Thickness(0, 0, 14, 0);
-        return card;
-    }
-
-    private static DockPanel Routing(string label, bool on)
-    {
-        var d = new DockPanel { Margin = new Thickness(0, 4, 0, 4) };
-        var sw = Switch(on, false, "Routing goes live in Iteration 4.");
-        DockPanel.SetDock(sw, Dock.Right);
-        d.Children.Add(sw);
-        d.Children.Add(Text(label, 13, muted: true));
-        return d;
-    }
-
-    /// <summary>The live App Audio strip: app picker with status, gain fader, meter, mute and routing.</summary>
-    private Border AppStrip(ChannelSettings s)
-    {
-        var p = new StackPanel { HorizontalAlignment = HorizontalAlignment.Stretch };
-        var head = new StackPanel { Orientation = Orientation.Horizontal };
-        head.Children.Add(Icon(Glyph.App, 18, "Accent2Brush"));
-        var titles = new StackPanel { Margin = new Thickness(10, 0, 0, 0) };
-        titles.Children.Add(Text("App Audio", 15, weight: FontWeights.SemiBold));
+        titles.Children.Add(Text(title, 15, weight: FontWeights.SemiBold));
         var status = new StackPanel { Orientation = Orientation.Horizontal };
-        var dot = new System.Windows.Shapes.Ellipse { Width = 7, Height = 7, Margin = new Thickness(0, 1, 6, 0), VerticalAlignment = VerticalAlignment.Center };
+        var dot = new Ellipse { Width = 7, Height = 7, Margin = new Thickness(0, 1, 6, 0), VerticalAlignment = VerticalAlignment.Center };
         var statusText = Text("", 12, muted: true);
         statusText.TextWrapping = TextWrapping.NoWrap;
         statusText.TextTrimming = TextTrimming.CharacterEllipsis;
+        statusText.MaxWidth = 190;
         status.Children.Add(dot);
         status.Children.Add(statusText);
         titles.Children.Add(status);
         head.Children.Add(titles);
         p.Children.Add(head);
 
-        // Picker button (same 40 px slot as the other strips keep empty).
-        var pickIcon = new Image { Width = 18, Height = 18, Margin = new Thickness(0, 0, 8, 0), VerticalAlignment = VerticalAlignment.Center };
-        var pickText = new TextBlock { VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
-        var pickContent = new DockPanel();
-        var chevron = Icon("\uE70D", 11, "MuteBrush");
-        chevron.Margin = new Thickness(8, 0, 0, 0);
-        DockPanel.SetDock(pickIcon, Dock.Left);
-        DockPanel.SetDock(chevron, Dock.Right);
-        pickContent.Children.Add(pickIcon);
-        pickContent.Children.Add(chevron);
-        pickContent.Children.Add(pickText);
-        var pick = new Button
-        {
-            Style = (Style)Application.Current.FindResource("SoftButton"),
-            Content = pickContent,
-            Height = 40,
-            Margin = new Thickness(0, 12, 0, 0),
-            HorizontalContentAlignment = HorizontalAlignment.Stretch,
-            ToolTip = "Choose the app whose sound joins your virtual mic",
-        };
-        System.Windows.Automation.AutomationProperties.SetName(pick, "Choose app");
-        pick.Click += async (_, _) => await AppPickerDialog.PickAsync(_sb);
-        // The pill template stacks its content, so size it to the button to put the chevron on the right.
-        pick.SizeChanged += (_, e) => pickContent.Width = Math.Max(0, e.NewSize.Width - pick.Padding.Left - pick.Padding.Right - 2);
-        p.Children.Add(pick);
+        slot.Height = 40;
+        slot.Margin = new Thickness(0, 12, 0, 0);
+        p.Children.Add(slot);
 
-        var fader = new Slider { Orientation = Orientation.Vertical, Height = 170, Minimum = 0, Maximum = 200, Value = s.Gain, SmallChange = 1, LargeChange = 10, ToolTip = "App volume (100 % = as the app plays it)" };
-        System.Windows.Automation.AutomationProperties.SetName(fader, "App audio volume");
+        var fader = new Slider { Orientation = Orientation.Vertical, Height = 170, Minimum = 0, Maximum = 200, Value = s.Gain, SmallChange = 1, LargeChange = 10, ToolTip = "Volume (100 % = unchanged, above 100 % boosts)" };
+        System.Windows.Automation.AutomationProperties.SetName(fader, $"{title} volume");
         var meter = new ProgressBar
         {
             Style = (Style)Application.Current.FindResource("Meter"), Orientation = Orientation.Vertical,
-            Width = 6, Height = 170, Maximum = 1, Value = 0, Margin = new Thickness(14, 0, 0, 0), ToolTip = "App audio level",
+            Width = 6, Height = 170, Maximum = 1, Value = 0, Margin = new Thickness(14, 0, 0, 0), ToolTip = $"{title} level",
         };
         var faderRow = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 18, 0, 0) };
         faderRow.Children.Add(fader);
@@ -175,58 +113,93 @@ public sealed class MixerPage : UserControl
         {
             var g = (int)Math.Round(fader.Value);
             value.Text = $"{g}%";
-            _sb.SetAppChannel(gain: g);
+            if (!_filling) _sb.SetChannel(ch, gain: g);
         };
 
-        var mute = PageKit.Button(s.Muted ? "Unmute" : "Mute", glyph: Glyph.Mute);
+        var mute = PageKit.Button("Mute", glyph: ch == MixChannel.Mic ? Glyph.MicOff : Glyph.Mute);
         mute.HorizontalAlignment = HorizontalAlignment.Stretch;
-        void ShowMute(bool m)
-        {
-            mute.Content = m ? "Unmute" : "Mute";
-            mute.Foreground = (System.Windows.Media.Brush)Application.Current.FindResource(m ? "BadBrush" : "InkBrush");
-        }
-        ShowMute(s.Muted);
-        mute.Click += (_, _) =>
-        {
-            var m = !_sb.Config.Channels.App.Muted;
-            _sb.SetAppChannel(muted: m);
-            ShowMute(m);
-        };
+        System.Windows.Automation.AutomationProperties.SetName(mute, $"Mute {title}");
+        mute.Click += (_, _) => _sb.SetChannel(ch, muted: !SoundboardController.Settings(_sb.Config, ch).Muted);
         p.Children.Add(mute);
 
         var routing = new StackPanel { Margin = new Thickness(0, 14, 0, 0) };
-        var toMic = Switch(s.ToVirtualMic, true, "Send this app's sound to the virtual mic");
-        toMic.Click += (_, _) => _sb.SetAppChannel(toVirtualMic: toMic.IsChecked == true);
-        routing.Children.Add(RoutingRow("To virtual mic", toMic));
-        routing.Children.Add(RoutingRow("Monitor", Switch(false, false, "You already hear the app itself; monitoring it too would play it twice.")));
+        CheckBox? toMic = null, toMon = null;
+        if (ch != MixChannel.Master)
+        {
+            toMic = Switch(s.ToVirtualMic, true, "Send this channel to the virtual mic (what others hear)");
+            OnToggle(toMic, on => { if (!_filling && on != SoundboardController.Settings(_sb.Config, ch).ToVirtualMic) _sb.SetChannel(ch, toVirtualMic: on); });
+            routing.Children.Add(RoutingRow("To virtual mic", toMic));
+            toMon = ch == MixChannel.App
+                ? Switch(false, false, "You already hear the app itself; monitoring it would play it twice.")
+                : Switch(s.ToMonitor, true, ch == MixChannel.Mic ? "Hear your own voice in your headphones" : "Hear your sounds in your headphones");
+            if (ch != MixChannel.App) OnToggle(toMon, on => { if (!_filling && on != SoundboardController.Settings(_sb.Config, ch).ToMonitor) _sb.SetChannel(ch, toMonitor: on); });
+            routing.Children.Add(RoutingRow("Monitor", toMon));
+        }
+        else
+        {
+            routing.Children.Add(Text("Limiter and the virtual-mic switch apply here.", 12, muted: true));
+        }
         p.Children.Add(routing);
 
-        void Refresh()
+        _refreshers.Add(() =>
         {
-            var sel = _sb.Config.Devices.AppSource;
-            var st = _sb.AppStatus;
-            pickText.Text = sel is null ? "Choose an app…" : st.Name ?? sel.DisplayName ?? sel.ProcessName;
-            pickIcon.Source = AppIcons.Get(sel?.ExePath);
-            pickIcon.Visibility = pickIcon.Source is null ? Visibility.Collapsed : Visibility.Visible;
-            (statusText.Text, var brush) = (sel, st.State) switch
-            {
-                (null, _) => ("No app chosen", "MuteBrush"),
-                (_, SourceState.Running) => ("Capturing", "OkBrush"),
-                (_, SourceState.Starting) => ("Connecting…", "Accent2Brush"),
-                (_, SourceState.Unavailable) => (st.Error ?? "Not running", "Accent2Brush"),
-                (_, SourceState.Failed) => (st.Error ?? "Capture failed", "BadBrush"),
-                _ => (_sb.EngineStarted ? "Off" : "Starting audio…", "MuteBrush"),
-            };
-            dot.Fill = (System.Windows.Media.Brush)Application.Current.FindResource(brush);
-            statusText.ToolTip = statusText.Text;
-        }
-        _sb.EngineChanged += Refresh;
-        _sb.PlaybackTick += () => meter.Value = Math.Min(1, _sb.AppLevel);
-        Refresh();
+            var cur = SoundboardController.Settings(_sb.Config, ch);
+            if ((int)Math.Round(fader.Value) != cur.Gain) fader.Value = cur.Gain;
+            mute.Content = cur.Muted ? "Unmute" : "Mute";
+            mute.Foreground = Res(cur.Muted ? "BadBrush" : "InkBrush");
+            if (toMic is not null) toMic.IsChecked = cur.ToVirtualMic;
+            if (toMon is not null && ch != MixChannel.App) toMon.IsChecked = cur.ToMonitor;
+            var (text, brush) = ChannelStatus(ch, cur);
+            statusText.Text = text;
+            statusText.ToolTip = text;
+            dot.Fill = Res(brush);
+        });
+        _sb.PlaybackTick += () => meter.Value = Db(ch switch
+        {
+            MixChannel.Mic => _sb.MicLevel,
+            MixChannel.App => _sb.AppLevel,
+            MixChannel.Soundboard => _sb.SoundboardLevel,
+            _ => _sb.MasterLevel,
+        });
 
         var card = Card(p, new Thickness(18, 18, 18, 16));
         card.Margin = new Thickness(0, 0, 14, 0);
         return card;
+    }
+
+    private (string Text, string Brush) ChannelStatus(MixChannel ch, ChannelSettings s)
+    {
+        var st = _sb.Status;
+        if (s.Muted) return ("Muted", "BadBrush");
+        switch (ch)
+        {
+            case MixChannel.Mic:
+                if (!_sb.Config.Devices.MicEnabled) return ("Off", "MuteBrush");
+                if (st.Mic.State == SourceState.Running)
+                {
+                    if (_sb.Config.Processing.PushToTalk.Enabled)
+                        return _sb.PushToTalkDown ? ("Talking (push-to-talk)", "OkBrush") : ($"Hold {_sb.Config.Processing.PushToTalk.Key} to talk", "Accent2Brush");
+                    return (st.Mic.Name ?? "Live", "OkBrush");
+                }
+                return (st.Mic.Error ?? (_sb.EngineStarted ? "Starting…" : "Off"), st.Mic.State == SourceState.Failed ? "BadBrush" : "Accent2Brush");
+            case MixChannel.App:
+                return (_sb.Config.Devices.AppSource, st.App.State) switch
+                {
+                    (null, _) => ("No app chosen", "MuteBrush"),
+                    (_, SourceState.Running) => ("Capturing", "OkBrush"),
+                    (_, SourceState.Starting) => ("Connecting…", "Accent2Brush"),
+                    (_, SourceState.Unavailable) => (st.App.Error ?? "Not running", "Accent2Brush"),
+                    (_, SourceState.Failed) => (st.App.Error ?? "Capture failed", "BadBrush"),
+                    _ => ("Starting…", "MuteBrush"),
+                };
+            case MixChannel.Soundboard:
+                var n = _sb.Items.Count;
+                return (n == 0 ? "No sounds yet" : $"{n} sound{(n == 1 ? "" : "s")}", n == 0 ? "MuteBrush" : "OkBrush");
+            default:
+                if (!_sb.Config.Devices.VirtualMicEnabled) return ("Virtual mic off (sending silence)", "Accent2Brush");
+                return st.Output.State == SourceState.Running ? ("Live on the virtual mic", "OkBrush")
+                    : (st.Output.Error ?? "No virtual mic output", "BadBrush");
+        }
     }
 
     private static DockPanel RoutingRow(string label, CheckBox sw)
@@ -238,11 +211,81 @@ public sealed class MixerPage : UserControl
         return d;
     }
 
-    private static Border Processor(string title, string desc, bool on, int value, string unit)
+    private static DockPanel SwitchRow(string label, CheckBox sw)
     {
+        var d = RoutingRow(label, sw);
+        d.Margin = new Thickness(4, 0, 0, 0);
+        d.VerticalAlignment = VerticalAlignment.Center;
+        return d;
+    }
+
+    private DockPanel MicSlot()
+    {
+        var ptt = Switch(_sb.Config.Processing.PushToTalk.Enabled, true, "Only send your mic while the push-to-talk key is held (set the key on the Shortcuts page). The key still works in other apps.");
+        System.Windows.Automation.AutomationProperties.SetName(ptt, "Push-to-talk");
+        OnToggle(ptt, async on => { if (!_filling && on != _sb.Config.Processing.PushToTalk.Enabled) await _sb.SetPushToTalkAsync(on); });
+        _refreshers.Add(() => ptt.IsChecked = _sb.Config.Processing.PushToTalk.Enabled);
+        return SwitchRow("Push-to-talk", ptt);
+    }
+
+    private DockPanel MasterSlot()
+    {
+        var vm = Switch(_sb.Config.Devices.VirtualMicEnabled, true, "Off sends silence to the virtual mic (meters keep working)");
+        System.Windows.Automation.AutomationProperties.SetName(vm, "Virtual mic on");
+        OnToggle(vm, on => { if (!_filling && on != _sb.Config.Devices.VirtualMicEnabled) _sb.SetVirtualMic(on); });
+        _refreshers.Add(() => vm.IsChecked = _sb.Config.Devices.VirtualMicEnabled);
+        return SwitchRow("Virtual mic on", vm);
+    }
+
+    private Button BoardSlot()
+    {
+        var stop = PageKit.Button("Stop all", glyph: Glyph.Stop, tooltip: "Stop every sound that is playing");
+        stop.Click += (_, _) => _sb.StopAll();
+        return stop;
+    }
+
+    private Button AppSlot()
+    {
+        var pickIcon = new Image { Width = 18, Height = 18, Margin = new Thickness(0, 0, 8, 0), VerticalAlignment = VerticalAlignment.Center };
+        var pickText = new TextBlock { VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
+        var content = new DockPanel();
+        var chevron = Icon("", 11, "MuteBrush");
+        chevron.Margin = new Thickness(8, 0, 0, 0);
+        DockPanel.SetDock(pickIcon, Dock.Left);
+        DockPanel.SetDock(chevron, Dock.Right);
+        content.Children.Add(pickIcon);
+        content.Children.Add(chevron);
+        content.Children.Add(pickText);
+        var pick = new Button
+        {
+            Style = (Style)Application.Current.FindResource("SoftButton"),
+            Content = content,
+            ToolTip = "Choose the app whose sound joins your virtual mic",
+        };
+        System.Windows.Automation.AutomationProperties.SetName(pick, "Choose app");
+        pick.Click += async (_, _) => await AppPickerDialog.PickAsync(_sb);
+        // The pill template stacks its content, so size it to the button to put the chevron on the right.
+        pick.SizeChanged += (_, e) => content.Width = Math.Max(0, e.NewSize.Width - pick.Padding.Left - pick.Padding.Right - 2);
+        _refreshers.Add(() =>
+        {
+            var sel = _sb.Config.Devices.AppSource;
+            pickText.Text = sel is null ? "Choose an app…" : _sb.AppStatus.Name ?? sel.DisplayName ?? sel.ProcessName;
+            pickIcon.Source = AppIcons.Get(sel?.ExePath);
+            pickIcon.Visibility = pickIcon.Source is null ? Visibility.Collapsed : Visibility.Visible;
+        });
+        return pick;
+    }
+
+    // ---- processing ---------------------------------------------------------------------
+
+    private Border ProcessorCard(Processor proc, string title, string desc, int min, int max, string unit)
+    {
+        var s = SoundboardController.Settings(_sb.Config, proc);
         var p = new StackPanel();
         var top = new DockPanel();
-        var sw = Switch(on, false, "Processing goes live in Iteration 4.");
+        var sw = Switch(s.Enabled, true, $"Turn the {title.ToLowerInvariant()} on or off");
+        System.Windows.Automation.AutomationProperties.SetName(sw, title);
+        OnToggle(sw, on => { if (!_filling && on != SoundboardController.Settings(_sb.Config, proc).Enabled) _sb.SetProcessing(proc, enabled: on); });
         DockPanel.SetDock(sw, Dock.Right);
         top.Children.Add(sw);
         var t = new StackPanel();
@@ -251,27 +294,133 @@ public sealed class MixerPage : UserControl
         top.Children.Add(t);
         p.Children.Add(top);
         var row = new DockPanel { Margin = new Thickness(0, 12, 0, 0) };
-        var v = Text($"{value}{unit}", 13, muted: true);
+        var v = Text($"{s.Value}{unit}", 13, muted: true);
         v.Width = 44;
         v.TextAlignment = TextAlignment.Right;
         DockPanel.SetDock(v, Dock.Right);
         row.Children.Add(v);
-        row.Children.Add(new Slider { Minimum = 0, Maximum = 100, Value = value, IsEnabled = false, ToolTip = "Processing goes live in Iteration 4." });
+        var slider = new Slider { Minimum = min, Maximum = max, Value = Math.Clamp(s.Value, min, max), IsSnapToTickEnabled = true, TickFrequency = 1 };
+        System.Windows.Automation.AutomationProperties.SetName(slider, $"{title} amount");
+        slider.ValueChanged += (_, _) =>
+        {
+            var val = (int)slider.Value;
+            v.Text = $"{val}{unit}";
+            if (!_filling) _sb.SetProcessing(proc, value: val);
+        };
+        row.Children.Add(slider);
         p.Children.Add(row);
+        _refreshers.Add(() =>
+        {
+            var cur = SoundboardController.Settings(_sb.Config, proc);
+            sw.IsChecked = cur.Enabled;
+            slider.IsEnabled = cur.Enabled;
+        });
         var card = Card(p, new Thickness(18, 16, 18, 14));
         card.Margin = new Thickness(0, 0, 14, 0);
         return card;
     }
 
-    private static StackPanel DeviceField(string label, string value)
+    // ---- devices ------------------------------------------------------------------------
+
+    private Border DevicesCard()
+    {
+        var grid = new UniformGrid { Rows = 1 };
+        grid.Children.Add(DeviceColumn("Microphone", DeviceKind.Input, () => _sb.Config.Devices.InputDeviceId,
+            id => _sb.SetDevicesAsync(d => d.InputDeviceId = id), "System default microphone",
+            () => _sb.Config.Devices.MicEnabled, on => _sb.SetDevicesAsync(d => d.MicEnabled = on), "Use microphone",
+            () => _sb.Status.Mic, info => info.IsVirtualCable ? " (virtual cable: would echo)" : ""));
+        grid.Children.Add(DeviceColumn("Virtual mic output", DeviceKind.Output, () => _sb.Config.Devices.OutputDeviceId,
+            id => _sb.SetDevicesAsync(d => d.OutputDeviceId = id), "Auto: VB-Audio virtual cable",
+            null, null, null, () => _sb.Status.Output, info => info.IsVirtualCable ? " (recommended)" : ""));
+        grid.Children.Add(DeviceColumn("Monitor (your headphones)", DeviceKind.Output, () => _sb.Config.Devices.MonitorDeviceId,
+            id => _sb.SetDevicesAsync(d => d.MonitorDeviceId = id), "System default speakers",
+            () => _sb.Config.Devices.MonitorEnabled, on => _sb.SetDevicesAsync(d => d.MonitorEnabled = on), "Monitor on",
+            () => _sb.Status.Monitor, info => info.IsVirtualCable ? " (virtual cable: not useful)" : ""));
+        grid.Children.Add(LatencyColumn());
+        return Card(grid, new Thickness(20, 16, 4, 18));
+    }
+
+    private StackPanel DeviceColumn(string label, DeviceKind kind, Func<string?> current, Func<string?, Task> choose, string defaultText,
+        Func<bool>? isOn, Func<bool, Task>? setOn, string? onLabel, Func<SourceStatus> status, Func<AudioDeviceInfo, string> note)
     {
         var p = new StackPanel { Margin = new Thickness(0, 0, 16, 0) };
-        p.Children.Add(Text(label, 13, weight: FontWeights.Medium));
-        var box = new ComboBox { IsEnabled = false, Margin = new Thickness(0, 6, 0, 0), ToolTip = "Device selection goes live in Iteration 4." };
-        box.Items.Add(value);
-        box.SelectedIndex = 0;
+        var head = new DockPanel { Height = 30 }; // same height with or without a switch, so columns line up
+        CheckBox? sw = null;
+        if (isOn is not null && setOn is not null)
+        {
+            sw = Switch(isOn(), true, onLabel ?? label);
+            System.Windows.Automation.AutomationProperties.SetName(sw, onLabel ?? label);
+            OnToggle(sw, async on => { if (!_filling && on != isOn()) await setOn(on); });
+            DockPanel.SetDock(sw, Dock.Right);
+            head.Children.Add(sw);
+        }
+        head.Children.Add(Text(label, 13, weight: FontWeights.Medium));
+        p.Children.Add(head);
+        var box = new ComboBox { Margin = new Thickness(0, 8, 0, 0) };
+        System.Windows.Automation.AutomationProperties.SetName(box, label);
+        box.SelectionChanged += async (_, _) =>
+        {
+            if (_filling || box.SelectedItem is not ComboBoxItem item) return;
+            await choose(item.Tag as string);
+        };
         p.Children.Add(box);
+        var st = Text("", 12, muted: true);
+        st.Margin = new Thickness(2, 6, 0, 0);
+        st.TextWrapping = TextWrapping.Wrap;
+        p.Children.Add(st);
+
+        _refreshers.Add(() =>
+        {
+            if (sw is not null) sw.IsChecked = isOn!();
+            box.Items.Clear();
+            box.Items.Add(new ComboBoxItem { Content = defaultText, Tag = null });
+            IReadOnlyList<AudioDeviceInfo> devices = [];
+            try
+            {
+                if (_deviceCache.TryGetValue(kind, out var cached)) devices = cached;
+                else if (_sb.EngineStarted) devices = _deviceCache[kind] = _sb.ListDevices(kind);
+            }
+            catch (System.Runtime.InteropServices.COMException) { }
+            foreach (var d in devices)
+                box.Items.Add(new ComboBoxItem { Content = d.Name + note(d), Tag = d.Id });
+            var id = current();
+            box.SelectedItem = box.Items.Cast<ComboBoxItem>().FirstOrDefault(i => (string?)i.Tag == id) ?? box.Items[0];
+            box.IsEnabled = isOn?.Invoke() ?? true;
+            var s = status();
+            (st.Text, st.Foreground) = s.State switch
+            {
+                SourceState.Running => ($"In use: {s.Name}", Res("OkBrush")),
+                SourceState.Failed => (s.Error ?? "Failed", Res("BadBrush")),
+                SourceState.Unavailable => (s.Error ?? "Not available", Res("Accent2Brush")),
+                SourceState.Starting => ("Starting…", Res("MuteBrush")),
+                _ => (isOn?.Invoke() == false ? "Off" : _sb.EngineStarted ? "Off" : "Starts with the audio engine", Res("MuteBrush")),
+            };
+        });
+        return p;
+    }
+
+    private StackPanel LatencyColumn()
+    {
+        var p = new StackPanel { Margin = new Thickness(0, 0, 16, 0) };
+        var title = Text("Buffer size", 13, weight: FontWeights.Medium);
+        title.Height = 30;
+        title.VerticalAlignment = VerticalAlignment.Center;
+        title.Padding = new Thickness(0, 6, 0, 0);
+        p.Children.Add(title);
+        var box = new ComboBox { Margin = new Thickness(0, 8, 0, 0) };
+        System.Windows.Automation.AutomationProperties.SetName(box, "Buffer size");
+        foreach (var ms in DeviceSettings.LatencyChoices)
+            box.Items.Add(new ComboBoxItem { Content = ms switch { 10 => "10 ms (lowest delay)", 20 => "20 ms (recommended)", 40 => "40 ms", _ => "80 ms (most stable)" }, Tag = ms });
+        box.SelectionChanged += async (_, _) =>
+        {
+            if (_filling || box.SelectedItem is not ComboBoxItem { Tag: int ms }) return;
+            await _sb.SetDevicesAsync(d => d.LatencyMs = ms);
+        };
+        p.Children.Add(box);
+        var hint = Text("Raise it if you hear crackles; lower it for less delay.", 12, muted: true);
+        hint.Margin = new Thickness(2, 6, 0, 0);
+        p.Children.Add(hint);
+        _refreshers.Add(() => box.SelectedItem = box.Items.Cast<ComboBoxItem>().FirstOrDefault(i => (int)i.Tag == _sb.Config.Devices.LatencyMs));
         return p;
     }
 }
-

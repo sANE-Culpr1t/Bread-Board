@@ -64,10 +64,15 @@ public partial class MainWindow : Window
         var sb = _host.Soundboard;
         sb.Notice += ShowToast;
         sb.EngineChanged += UpdateEngineStatus;
+        sb.MixChanged += UpdateEngineStatus;
+        PageKit.OnToggle(VmSwitch, on => { if (on != sb.Config.Devices.VirtualMicEnabled) sb.SetVirtualMic(on); });
+        StateChanged += (_, _) => sb.MetersVisible = WindowState != WindowState.Minimized;
         sb.PlaybackTick += () =>
         {
-            BoardMeter.Value = Math.Min(1, sb.SoundboardLevel);
-            AppMeter.Value = Math.Min(1, sb.AppLevel);
+            BoardMeter.Value = MixerPage.Db(sb.SoundboardLevel);
+            AppMeter.Value = MixerPage.Db(sb.AppLevel);
+            MicMeter.Value = MixerPage.Db(sb.MicLevel);
+            MasterMeter.Value = MixerPage.Db(sb.MasterLevel);
         };
         sb.ToggleMiniRequested = () => { if (_mini is null) ShowMini(); else _mini.Close(); };
         Toast.MouseLeftButtonUp += (_, _) => HideToast();
@@ -90,7 +95,7 @@ public partial class MainWindow : Window
         Log.Info($"Toast ({(error ? "error" : "info")}): {text}");
     }
 
-    private void HideToast()
+    internal void HideToast()
     {
         _toastTimer.Stop();
         Toast.Visibility = Visibility.Collapsed;
@@ -99,11 +104,16 @@ public partial class MainWindow : Window
     private void UpdateEngineStatus()
     {
         var sb = _host.Soundboard;
-        EngineTitle.Text = sb.EngineOk ? "Soundboard live" : "Audio output problem";
+        EngineTitle.Text = !sb.EngineStarted ? "Audio engine idle" : sb.MonitorOnlyMode ? "Monitor only" : sb.EngineOk ? "Audio live" : "Audio output problem";
         EngineDetail.Text = sb.EngineSummary;
         EngineDetail.ToolTip = sb.EngineSummary;
-        VmDot.Fill = (System.Windows.Media.Brush)FindResource(sb.EngineOk ? "OkBrush" : "BadBrush");
-        VmStatus.Text = sb.EngineOk ? "Sending sounds" : "Not connected";
+        var vmOn = sb.Config.Devices.VirtualMicEnabled;
+        VmSwitch.IsChecked = vmOn;
+        var live = sb.EngineOk && !sb.MonitorOnlyMode;
+        VmDot.Fill = (System.Windows.Media.Brush)FindResource(!vmOn ? "MuteBrush" : live ? "OkBrush" : "BadBrush");
+        VmStatus.Text = !vmOn ? "Off (sending silence)" : live ? "Live" : sb.EngineStarted ? "Not connected" : "Starting…";
+        MicMeterLabel.Text = sb.Config.Channels.Mic.Muted ? "Microphone (muted)" : sb.Config.Devices.MicEnabled ? "Microphone" : "Microphone (off)";
+        MasterMeterLabel.Text = sb.Config.Channels.Master.Muted ? "Master (muted)" : "Master";
         VmCard.ToolTip = sb.EngineSummary;
         var app = sb.AppStatus;
         AppMeterLabel.Text = app.State == Audio.SourceState.Running ? $"App · {app.Name}" : "App audio";
@@ -163,7 +173,7 @@ public partial class MainWindow : Window
     private FrameworkElement CreatePage(PageId id) => id switch
     {
         PageId.Soundboard => new SoundboardPage(_host.Soundboard),
-        PageId.Mixer => new MixerPage(_host.Config, _host.Soundboard),
+        PageId.Mixer => new MixerPage(_host.Soundboard),
         PageId.Shortcuts => new ShortcutsPage(_host.Soundboard),
         PageId.Settings => new SettingsPage(_host.Config, this, _host.Soundboard),
         _ => throw new ArgumentOutOfRangeException(nameof(id)),

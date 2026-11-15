@@ -22,14 +22,13 @@ public sealed class SettingsPage : UserControl
 
         root.Children.Add(SectionTitle("Gaming Mode"));
         var openOnStart = Switch(ui.MiniOpenOnStart, true, "Open the mini-player whenever Bread Board starts");
-        openOnStart.Click += (_, _) => config.Update(c => c.Ui.MiniOpenOnStart = openOnStart.IsChecked == true);
+        OnToggle(openOnStart, on => config.Update(c => c.Ui.MiniOpenOnStart = on));
         var onTop = Switch(ui.MiniTopmost, true, "Keep the mini-player above other windows, including games in windowed mode");
-        onTop.Click += (_, _) =>
+        OnToggle(onTop, v =>
         {
-            var v = onTop.IsChecked == true;
             config.Update(c => c.Ui.MiniTopmost = v);
             window.MiniPlayer?.SetTopmost(v);
-        };
+        });
         var open = PageKit.Button("Open mini-player", glyph: Theme.Glyph.Game);
         open.Click += (_, _) => window.ShowMini();
         var gaming = new StackPanel();
@@ -41,19 +40,17 @@ public sealed class SettingsPage : UserControl
         root.Children.Add(SectionTitle("Playback"));
         var pb = config.Current.Playback;
         var playback = new StackPanel();
-        var hear = Switch(pb.HearOnThisPc, true, "Play sounds on your default speakers or headphones as well as the virtual mic");
-        hear.Click += async (_, _) =>
-        {
-            config.Update(c => c.Playback.HearOnThisPc = hear.IsChecked == true);
-            await sb.ApplyPlaybackSettingsAsync(devices: true);
-        };
-        playback.Children.Add(Row("Hear sounds on this PC", "Also plays them on your default speakers or headphones, so you hear what others hear.", hear));
+        var hear = Switch(config.Current.Devices.MonitorEnabled, true, "Play the monitor mix (your sounds) on your headphones as well as the virtual mic");
+        OnToggle(hear, async on => { if (on != config.Current.Devices.MonitorEnabled) await sb.SetDevicesAsync(d => d.MonitorEnabled = on); });
+        sb.MixChanged += () => hear.IsChecked = config.Current.Devices.MonitorEnabled;
+        sb.EngineChanged += () => hear.IsChecked = config.Current.Devices.MonitorEnabled;
+        playback.Children.Add(Row("Hear sounds on this PC", "Plays the monitor mix on your headphones (pick the device and what goes in it on the Mixer page).", hear));
         var stacking = Switch(pb.AllowStacking, true, "Pressing a one-shot sound again plays another copy over it");
-        stacking.Click += async (_, _) =>
+        OnToggle(stacking, async on =>
         {
-            config.Update(c => c.Playback.AllowStacking = stacking.IsChecked == true);
+            config.Update(c => c.Playback.AllowStacking = on);
             await sb.ApplyPlaybackSettingsAsync();
-        };
+        });
         playback.Children.Add(Row("Allow sound stacking", "Pressing a one-shot sound again plays another copy over it; otherwise it restarts.", stacking));
         var voices = new Slider { Width = 160, Minimum = 1, Maximum = 16, Value = pb.MaxVoices, IsSnapToTickEnabled = true, TickFrequency = 1 };
         var voicesText = Text($"{pb.MaxVoices}", 14);
@@ -74,7 +71,7 @@ public sealed class SettingsPage : UserControl
         output.MaxWidth = 320;
         output.TextAlignment = TextAlignment.Right;
         sb.EngineChanged += () => output.Text = sb.EngineSummary;
-        playback.Children.Add(Row("Output", "In Discord or your game, pick CABLE Output as the microphone. Choosing devices arrives in Iteration 4.", output, last: true));
+        playback.Children.Add(Row("Output", "In Discord or your game, pick CABLE Output as the microphone. Devices are chosen on the Mixer page.", output, last: true));
         root.Children.Add(Card(playback));
 
         root.Children.Add(SectionTitle("Profiles"));

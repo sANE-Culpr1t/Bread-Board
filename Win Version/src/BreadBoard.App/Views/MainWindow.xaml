@@ -73,8 +73,8 @@
 
                         <Border x:Name="VmCard" Style="{StaticResource FlatCard}" Padding="14,12" CornerRadius="14">
                             <DockPanel>
-                                <CheckBox DockPanel.Dock="Right" Style="{StaticResource Switch}" IsEnabled="False" VerticalAlignment="Center"
-                                          ToolTip="Switching the virtual mic on and off arrives in Iteration 4."/>
+                                <CheckBox x:Name="VmSwitch" DockPanel.Dock="Right" Style="{StaticResource Switch}" VerticalAlignment="Center"
+                                          ToolTip="Virtual mic on/off (off sends silence)" AutomationProperties.Name="Virtual mic on"/>
                                 <StackPanel x:Name="VmText" VerticalAlignment="Center">
                                     <StackPanel Orientation="Horizontal">
                                         <Ellipse x:Name="VmDot" Width="9" Height="9" Fill="{StaticResource MuteBrush}" Margin="0,0,8,0"/>
@@ -159,10 +159,10 @@
                             <UniformGrid.Resources>
                                 <Style TargetType="TextBlock"><Setter Property="FontSize" Value="12"/><Setter Property="Foreground" Value="{StaticResource MuteBrush}"/><Setter Property="Margin" Value="0,0,0,5"/></Style>
                             </UniformGrid.Resources>
-                            <StackPanel Margin="0,0,16,0" ToolTip="Microphone level arrives with the mixer in Iteration 4."><TextBlock Text="Microphone"/><ProgressBar Style="{StaticResource Meter}" Value="0"/></StackPanel>
+                            <StackPanel Margin="0,0,16,0" ToolTip="Microphone level"><TextBlock x:Name="MicMeterLabel" Text="Microphone" TextTrimming="CharacterEllipsis"/><ProgressBar x:Name="MicMeter" Style="{StaticResource Meter}" Maximum="1" Value="0"/></StackPanel>
                             <StackPanel x:Name="AppMeterBox" Margin="0,0,16,0" ToolTip="Choose an app on the Mixer page"><TextBlock x:Name="AppMeterLabel" Text="App audio" TextTrimming="CharacterEllipsis"/><ProgressBar x:Name="AppMeter" Style="{StaticResource Meter}" Maximum="1" Value="0"/></StackPanel>
                             <StackPanel Margin="0,0,16,0" ToolTip="Live level of the soundboard"><TextBlock Text="Soundboard"/><ProgressBar x:Name="BoardMeter" Style="{StaticResource Meter}" Maximum="1" Value="0"/></StackPanel>
-                            <StackPanel Margin="0,0,16,0" ToolTip="Master level arrives with the mixer in Iteration 4."><TextBlock Text="Master"/><ProgressBar Style="{StaticResource Meter}" Value="0"/></StackPanel>
+                            <StackPanel Margin="0,0,16,0" ToolTip="Level sent to the virtual mic"><TextBlock x:Name="MasterMeterLabel" Text="Master" TextTrimming="CharacterEllipsis"/><ProgressBar x:Name="MasterMeter" Style="{StaticResource Meter}" Maximum="1" Value="0"/></StackPanel>
                         </UniformGrid>
                         <Border Grid.Column="2" CornerRadius="16" Background="{StaticResource RaisedBrush}" Padding="14,7" VerticalAlignment="Center">
                             <StackPanel Orientation="Horizontal">

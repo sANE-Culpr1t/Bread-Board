@@ -137,3 +137,23 @@ public sealed class RingBufferSampleProvider(FloatRingBuffer ring) : ISampleProv
         return buffer.Length;
     }
 }
+
+/// <summary>
+/// Drives the mixer from the monitor device when there is no virtual-mic output (e.g. no virtual cable):
+/// each read renders a mixer block (main bus discarded) and plays the monitor mix it produced.
+/// </summary>
+public sealed class MonitorTap(MixerEngine mixer, FloatRingBuffer ring) : ISampleProvider
+{
+    private float[] _scratch = [];
+
+    public WaveFormat WaveFormat => AudioFormat.Wave;
+
+    public int Read(Span<float> buffer)
+    {
+        if (_scratch.Length < buffer.Length) _scratch = new float[buffer.Length];
+        mixer.Read(_scratch.AsSpan(0, buffer.Length));
+        var n = ring.Read(buffer);
+        buffer[n..].Clear();
+        return buffer.Length;
+    }
+}

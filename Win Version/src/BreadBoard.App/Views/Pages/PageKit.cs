@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Media;
 using BreadBoard.App.Theme;
 
@@ -86,6 +87,16 @@ internal static class PageKit
         IsEnabled = enabled,
         ToolTip = tooltip,
     };
+
+    /// <summary>
+    /// Runs <paramref name="changed"/> when the switch changes by any means (mouse, keyboard, screen reader /
+    /// UI Automation), not only on mouse clicks. Callers ignore changes that match the saved value.
+    /// </summary>
+    public static void OnToggle(ToggleButton toggle, Action<bool> changed)
+    {
+        toggle.Checked += (_, _) => changed(true);
+        toggle.Unchecked += (_, _) => changed(false);
+    }
 
     public static ScrollViewer Scroll(UIElement content) => new()
     {

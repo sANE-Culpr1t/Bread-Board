@@ -28,6 +28,8 @@ public sealed class AudioHost : IAsyncDisposable
     private readonly CancellationTokenSource _life = new();
     private CaptureSource? _mic, _app;
     private int _appPid;
+    private int _latency = -1;
+    private bool _monitorDriven;
     private Process? _appProcess;
     private Timer? _appWait;
     private OutputDevice? _output, _monitor;
@@ -49,6 +51,8 @@ public sealed class AudioHost : IAsyncDisposable
     public MixerEngine Mixer { get; }
 
     public HostStatus Status => new(_micStatus, _appStatus, _outStatus, _monStatus);
+    /// <summary>True while the monitor device drives the mix because there is no virtual-mic output.</summary>
+    public bool MonitorOnly => _monitorDriven && _monitor is not null;
     public event Action<HostStatus>? StatusChanged;
 
     /// <summary>Starts (or restarts) everything for <paramref name="config"/>.</summary>
@@ -113,21 +117,26 @@ public sealed class AudioHost : IAsyncDisposable
     private async Task RebuildAsync()
     {
         var dev = _config.Devices;
+        var latency = dev.LatencyMs;
+        var restartAll = latency != _latency; // buffer size changed: reopen every stream
+        _latency = latency;
 
         // Output (virtual cable) — started first so its name is known for the feedback check.
         var outDevice = dev.OutputDeviceId is null
             ? (Devices.FindVirtualCableOutput() is { } cable ? Devices.Resolve(DeviceKind.Output, cable.Id) : null)
             : Devices.Resolve(DeviceKind.Output, dev.OutputDeviceId);
-        if (_output is null || _outStatus.Name != outDevice?.FriendlyName || _outStatus.State != SourceState.Running)
+        if (restartAll || _output is null || _outStatus.Name != outDevice?.FriendlyName || _outStatus.State != SourceState.Running)
         {
             _output?.Dispose(); _output = null;
             if (outDevice is null)
-                SetOutput(new(SourceState.Unavailable, null, "No virtual audio cable found. Install VB-Audio Virtual Cable or pick an output."));
+                SetOutput(new(SourceState.Unavailable, null, dev.OutputDeviceId is null
+                    ? "No virtual audio cable found. Install VB-Audio Virtual Cable or pick an output."
+                    : "The chosen virtual-mic output isn't connected."));
             else
             {
                 try
                 {
-                    _output = OutputDevice.Start(outDevice, Mixer);
+                    _output = OutputDevice.Start(outDevice, Mixer, latency);
                     _output.Stopped += ex => { if (ex is not null) { SetOutput(new(SourceState.Failed, _outStatus.Name, ex.Message)); ScheduleRecovery("output failed", 1000); } };
                     SetOutput(new(SourceState.Running, outDevice.FriendlyName));
                 }
@@ -155,12 +164,12 @@ public sealed class AudioHost : IAsyncDisposable
             {
                 StopMic(new(SourceState.Failed, micDevice.FriendlyName, "Feedback loop: the input is the virtual cable itself. Pick your real microphone."));
             }
-            else if (_mic is null || _micStatus.Name != micDevice.FriendlyName || _micStatus.State != SourceState.Running)
+            else if (restartAll || _mic is null || _micStatus.Name != micDevice.FriendlyName || _micStatus.State != SourceState.Running)
             {
                 StopMic(new(SourceState.Starting, micDevice.FriendlyName));
                 try
                 {
-                    var src = CaptureSource.StartDevice(micDevice);
+                    var src = CaptureSource.StartDevice(micDevice, latency);
                     src.Stopped += ex => { if (ex is not null) { SetMic(new(SourceState.Failed, src.Name, ex.Message)); ScheduleRecovery("mic failed", 1000); } };
                     _mic = src;
                     Mixer.MicSource = src;
@@ -193,12 +202,12 @@ public sealed class AudioHost : IAsyncDisposable
                 StopApp(new(SourceState.Unavailable, label, $"Waiting for {label} to start"));
                 WatchForAppStart(sel.ProcessName);
             }
-            else if (_app is null || _appPid != app.ProcessId || _appStatus.State != SourceState.Running)
+            else if (restartAll || _app is null || _appPid != app.ProcessId || _appStatus.State != SourceState.Running)
             {
                 StopApp(new(SourceState.Starting, label));
                 try
                 {
-                    var src = await CaptureSource.StartProcessAsync(app.ProcessId, label).ConfigureAwait(false);
+                    var src = await CaptureSource.StartProcessAsync(app.ProcessId, label, latency).ConfigureAwait(false);
                     src.Stopped += ex => { SetApp(new(SourceState.Unavailable, label, ex?.Message ?? "Capture stopped")); ScheduleRecovery("app capture stopped", 2000); };
                     _app = src;
                     _appPid = app.ProcessId;
@@ -221,18 +230,21 @@ public sealed class AudioHost : IAsyncDisposable
         }
         else
         {
+            // With no virtual-mic output the monitor device clocks the mixer itself, so you still hear sounds.
+            var driven = _output is null;
             using var monDevice = Devices.Resolve(DeviceKind.Output, dev.MonitorDeviceId);
             if (monDevice is null) StopMonitor(new(SourceState.Unavailable, null, "Monitor device not found"));
-            else if (monDevice.FriendlyName == _outStatus.Name) StopMonitor(new(SourceState.Failed, monDevice.FriendlyName, "Monitor can't be the virtual mic output"));
-            else if (_monitor is null || _monStatus.Name != monDevice.FriendlyName || _monStatus.State != SourceState.Running)
+            else if (!driven && monDevice.FriendlyName == _outStatus.Name) StopMonitor(new(SourceState.Failed, monDevice.FriendlyName, "The monitor can't be the virtual mic output; you'd send everything twice."));
+            else if (restartAll || _monitor is null || _monStatus.Name != monDevice.FriendlyName || _monStatus.State != SourceState.Running || _monitorDriven != driven)
             {
                 StopMonitor(new(SourceState.Starting, monDevice.FriendlyName));
                 try
                 {
                     var ring = new FloatRingBuffer(AudioFormat.SamplesFor(500));
-                    _monitor = OutputDevice.Start(monDevice, new RingBufferSampleProvider(ring));
-                    _monitor.Stopped += ex => { if (ex is not null) ScheduleRecovery("monitor failed", 1000); };
                     Mixer.MonitorOut = ring;
+                    _monitor = OutputDevice.Start(monDevice, driven ? new MonitorTap(Mixer, ring) : new RingBufferSampleProvider(ring), latency);
+                    _monitorDriven = driven;
+                    _monitor.Stopped += ex => { if (ex is not null) ScheduleRecovery("monitor failed", 1000); };
                     SetMonitor(new(SourceState.Running, monDevice.FriendlyName));
                 }
                 catch (Exception ex)

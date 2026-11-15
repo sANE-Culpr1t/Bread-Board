@@ -96,7 +96,7 @@ through volatile fields and a command queue; live inputs are held ~40 ms behind 
   process loopback capture working (rms 0.22), virtual-mic switch sends silence.
 - `bb probe --app brave`: Brave's YouTube audio captured and heard on CABLE Output (rms 0.13), mic running.
 - `bb download <myinstants link>`: file found, downloaded and decoded.
-- `dotnet test`: 73 passing (includes a real launch that imports, plays, stops and removes a sound, and real capture of an app that closes and restarts).
+- `dotnet test`: 79 passing (real launch with import/play/stop/remove, real capture of an app that closes and restarts, monitor-only fallback, device switching, push-to-talk key watch).
 
 Global hotkeys: `Platform/Hotkeys/GlobalHotkeyService` (RegisterHotKey on its own message thread; hold-to-play watches the
 key only while it is held). `bb run` binds each sound's hotkey, or Num1–Num9 by default, plus Stop all / Mute mic.
@@ -104,5 +104,5 @@ key only while it is held). `bb run` binds each sound's hotkey, or Num1–Num9 b
 Tip: set VB-Cable to 48 kHz (Sound settings → "CABLE Input"/"Speakers (VB-Audio…)" and "CABLE Output" →
 Properties → Advanced → 2 channel, 24 bit, 48000 Hz). At other rates Bread Board resamples, which costs a little quality.
 
-Not yet built: microphone in the mix, live master/processing/devices and the virtual-mic switch (Iteration 4), profiles (Iteration 5).
+Not yet built: profiles, per-sound routing, random/sequences (Iteration 5), logo (Iteration 6).
 Not yet tested: Discord / Valorant / OBS end to end (in progress), long-running stability.

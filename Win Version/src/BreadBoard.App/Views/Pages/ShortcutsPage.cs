@@ -56,7 +56,7 @@ public sealed class ShortcutsPage : UserControl
         global.Children.Add(ShortcutRow(Glyph.Stop, ink, "Stop all sounds", "Silences everything that is playing", S(states, "global:stopAll", "Stop all sounds", _sb.Config.Hotkeys.StopAll), false));
         global.Children.Add(ShortcutRow(Glyph.Game, ink, "Toggle mini-player", "Shows or hides Gaming Mode", S(states, "global:toggleMini", "Toggle mini-player", _sb.Config.Hotkeys.ToggleMini), false));
         global.Children.Add(ShortcutRow(Glyph.MicOff, ink, "Mute microphone", "Toggles the mic channel", S(states, "global:muteMic", "Mute microphone", _sb.Config.Hotkeys.MuteMic, pending: true), false));
-        global.Children.Add(ShortcutRow(Glyph.Mic, ink, "Push-to-talk", "Hold to send your microphone", S(states, "global:ptt", "Push-to-talk", _sb.Config.Processing.PushToTalk.Key, pending: true), true));
+        global.Children.Add(ShortcutRow(Glyph.Mic, ink, "Push-to-talk", _sb.Config.Processing.PushToTalk.Enabled ? "Hold to send your microphone (the key still works in other apps)" : "Off: turn it on in Mixer › Microphone", S(states, "global:ptt", "Push-to-talk", _sb.Config.Processing.PushToTalk.Key, pending: true), true));
         root.Children.Add(Card(global, new Thickness(20, 4, 20, 4)));
 
         Content = Scroll(root);

@@ -34,25 +34,25 @@ public sealed class CaptureSource : IDisposable
     /// <summary>Raised (on a capture thread) when capture ends; non-null exception = failure such as device removal.</summary>
     public event Action<Exception?>? Stopped;
 
-    public static CaptureSource StartDevice(MMDevice device)
+    public static CaptureSource StartDevice(MMDevice device, int bufferMs = 20)
     {
         var rec = new WasapiRecorderBuilder()
             .WithDevice(device)
             .WithSharedMode()
             .WithFormat(AudioFormat.Wave)
-            .WithBufferLength(20)
+            .WithBufferLength(bufferMs)
             .WithMmcssThreadPriority("Pro Audio")
             .Build();
         return Start(rec, device.FriendlyName);
     }
 
     /// <summary>Captures everything <paramref name="processId"/> and its child processes play (Windows 10 2004+).</summary>
-    public static async Task<CaptureSource> StartProcessAsync(int processId, string name)
+    public static async Task<CaptureSource> StartProcessAsync(int processId, string name, int bufferMs = 20)
     {
         var rec = await new WasapiRecorderBuilder()
             .WithProcessLoopback((uint)processId, ProcessLoopbackMode.IncludeTargetProcessTree)
             .WithFormat(AudioFormat.Wave)
-            .WithBufferLength(20)
+            .WithBufferLength(bufferMs)
             .WithMmcssThreadPriority("Pro Audio")
             .BuildAsync()
             .ConfigureAwait(false);

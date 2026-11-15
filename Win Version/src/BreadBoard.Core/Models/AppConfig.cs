@@ -81,15 +81,20 @@ public sealed class DeviceSettings
     public string? MonitorDeviceId { get; set; }
     public bool MicEnabled { get; set; } = true;
     public bool VirtualMicEnabled { get; set; } = true;
-    public bool MonitorEnabled { get; set; }
+    /// <summary>Plays the monitor mix (by default your soundboard) on <see cref="MonitorDeviceId"/> so you hear it.</summary>
+    public bool MonitorEnabled { get; set; } = true;
     public AppSourceSelection? AppSource { get; set; }
+    /// <summary>Audio buffer size in ms for outputs and captures: lower = less delay, higher = fewer dropouts.</summary>
+    public int LatencyMs { get; set; } = 20;
+
+    public static readonly int[] LatencyChoices = [10, 20, 40, 80];
 }
 
 public sealed class PlaybackSettings
 {
     public bool AllowStacking { get; set; } = true;
     public int MaxVoices { get; set; } = 8;
-    /// <summary>Also play sounds on this PC's default speakers/headphones so you hear them.</summary>
+    /// <summary>Version 1 setting, moved to <see cref="DeviceSettings.MonitorEnabled"/> by the version 2 migration.</summary>
     public bool HearOnThisPc { get; set; } = true;
 }
 
@@ -126,7 +131,8 @@ public sealed class UiSettings
 
 public sealed class AppConfig
 {
-    public int Version { get; set; } = 1;
+    public const int CurrentVersion = 2;
+    public int Version { get; set; } = CurrentVersion;
     public UiSettings Ui { get; set; } = new();
     public List<SoundEntry> Sounds { get; set; } = [];
     public List<string> Categories { get; set; } = ["Memes", "Reactions", "Effects", "Music"];

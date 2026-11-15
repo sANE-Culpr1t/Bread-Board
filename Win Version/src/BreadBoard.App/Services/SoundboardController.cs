@@ -28,7 +28,7 @@ public sealed record HotkeyState(string OwnerKey, string Label, string? Combo, s
 /// UI-thread state for the pages. All public members must be called on the UI thread.
 /// The audio engine starts only once there is something to play.
 /// </summary>
-public sealed class SoundboardController : IDisposable
+public sealed partial class SoundboardController : IDisposable
 {
     private readonly AppHost _host;
     private readonly Dispatcher _ui;
@@ -78,7 +78,7 @@ public sealed class SoundboardController : IDisposable
     public async Task InitializeAsync()
     {
         await RegisterHotkeysAsync();
-        if (Items.Count > 0 || Config.Devices.AppSource is not null) await EnsureEngineAsync();
+        if (Items.Count > 0 || Config.Devices.AppSource is not null || Config.Devices.MicEnabled) await EnsureEngineAsync();
     }
 
     private Task EnsureEngineAsync() => _engineStart ??= StartEngineAsync();
@@ -88,6 +88,7 @@ public sealed class SoundboardController : IDisposable
         var audio = _host.Audio;
         audio.Soundboard.PlayingChanged += ids => _ui.BeginInvoke(() => OnPlayingChanged(ids));
         audio.StatusChanged += _ => _ui.BeginInvoke(UpdateEngineSummary);
+        audio.Devices.DevicesChanged += () => _ui.BeginInvoke(RaiseDevicesListChanged);
         try
         {
             await audio.StartAsync(AudioConfig());
@@ -102,22 +103,11 @@ public sealed class SoundboardController : IDisposable
         foreach (var item in Items.ToList()) await LoadAsync(item);
     }
 
-    /// <summary>
-    /// The engine gets a copy of the settings limited to what is wired so far: soundboard and the
-    /// chosen app → virtual cable (soundboard also to this PC's speakers). The mic joins in Iteration 4.
-    /// </summary>
+    /// <summary>A snapshot of the settings for the engine (it reads them on its own threads).</summary>
     private AppConfig AudioConfig()
     {
         var c = ConfigStore.Clone(_host.Config.Current);
-        c.Devices.MicEnabled = false;
         c.Channels.App.ToMonitor = false; // you already hear the app itself; a second, delayed copy would echo
-        c.Devices.VirtualMicEnabled = true;
-        c.Devices.MonitorEnabled = c.Playback.HearOnThisPc;
-        c.Devices.MonitorDeviceId = null;
-        c.Channels.Soundboard.Muted = false;
-        c.Channels.Soundboard.ToVirtualMic = true;
-        c.Channels.Soundboard.ToMonitor = true;
-        c.Channels.Master.Muted = false;
         return c;
     }
 
@@ -133,7 +123,7 @@ public sealed class SoundboardController : IDisposable
 
     private void UpdateEngineSummary()
     {
-        if (!_host.AudioCreated) return;
+        if (!_host.AudioCreated || _disposed) return; // late engine events during shutdown are ignored
         var s = _host.Audio.Status;
         if (s.Output.State == SourceState.Running)
         {
@@ -148,6 +138,12 @@ public sealed class SoundboardController : IDisposable
             EngineSummary = s.Output.Error ?? "Virtual cable not available";
         }
         AppStatus = s.App;
+        Status = s;
+        if (_host.Audio.MonitorOnly)
+        {
+            EngineOk = true;
+            EngineSummary = $"No virtual mic output · monitor only on {Name(s.Monitor.Name)}";
+        }
         UpdateTicking();
         EngineChanged?.Invoke();
 
@@ -222,6 +218,7 @@ public sealed class SoundboardController : IDisposable
 
     private void OnPlayingChanged(IReadOnlyList<string> ids)
     {
+        if (_disposed) return;
         foreach (var item in _byId.Values) item.Playing = ids.Contains(item.Id);
         if (ids.Count == 0)
         {
@@ -231,10 +228,11 @@ public sealed class SoundboardController : IDisposable
         UpdateTicking();
     }
 
-    /// <summary>The UI timer runs only while something is audible (a sound playing or an app captured).</summary>
+    /// <summary>The meter/progress timer runs only while the window is visible and something can make sound.</summary>
     private void UpdateTicking()
     {
-        var needed = AnyPlaying || AppStatus.State == SourceState.Running;
+        var needed = _metersVisible && EngineStarted
+            && (AnyPlaying || AppStatus.State == SourceState.Running || Status.Mic.State == SourceState.Running);
         if (needed) { if (!_tick.IsEnabled) _tick.Start(); return; }
         if (!_tick.IsEnabled) return;
         _tick.Stop();
@@ -247,8 +245,11 @@ public sealed class SoundboardController : IDisposable
         var engine = _host.Audio.Soundboard;
         foreach (var item in _byId.Values)
             if (item.Playing) item.Progress = engine.GetProgress(item.Id) % 1.0;
-        SoundboardLevel = _host.Audio.Mixer.Board.TakePeak();
-        AppLevel = _host.Audio.Mixer.App.TakePeak();
+        var mixer = _host.Audio.Mixer;
+        SoundboardLevel = mixer.Board.TakePeak();
+        AppLevel = mixer.App.TakePeak();
+        MicLevel = mixer.Mic.TakePeak();
+        MasterLevel = mixer.Master.TakePeak();
         PlaybackTick?.Invoke();
     }
 
@@ -273,17 +274,7 @@ public sealed class SoundboardController : IDisposable
         UpdateEngineSummary();
     }
 
-    /// <summary>App channel: gain 0–200 %, mute and whether it goes to the virtual mic.</summary>
-    public void SetAppChannel(int? gain = null, bool? muted = null, bool? toVirtualMic = null)
-    {
-        _host.Config.Update(c =>
-        {
-            if (gain is { } g) c.Channels.App.Gain = Math.Clamp(g, 0, 200);
-            if (muted is { } m) c.Channels.App.Muted = m;
-            if (toVirtualMic is { } v) c.Channels.App.ToVirtualMic = v;
-        });
-        if (EngineStarted) _host.Audio.ApplyMixSettings(AudioConfig());
-    }
+
 
     // ---- library ------------------------------------------------------------------------
 
@@ -465,9 +456,8 @@ public sealed class SoundboardController : IDisposable
         }
         await Add("global:stopAll", "Stop all sounds", cfg.Hotkeys.StopAll, () => _ui.BeginInvoke(StopAll));
         await Add("global:toggleMini", "Toggle mini-player", cfg.Hotkeys.ToggleMini, () => _ui.BeginInvoke(() => ToggleMiniRequested?.Invoke()));
-        // Mic mute and push-to-talk control the microphone, which joins the mix in Iteration 4.
-        _hotkeys["global:muteMic"] = new("global:muteMic", "Mute microphone", cfg.Hotkeys.MuteMic, null, Pending: true);
-        _hotkeys["global:ptt"] = new("global:ptt", "Push-to-talk", cfg.Processing.PushToTalk.Key, null, Pending: true);
+        await Add("global:muteMic", "Mute microphone", cfg.Hotkeys.MuteMic, () => _ui.BeginInvoke(ToggleMicMute));
+        ApplyPushToTalkWatch(cfg);
 
         foreach (var item in _byId.Values) item.HotkeyError = _hotkeys.GetValueOrDefault($"sound:{item.Id}")?.Error;
         HotkeysChanged?.Invoke();
@@ -489,6 +479,8 @@ public sealed class SoundboardController : IDisposable
             {
                 case "global:stopAll": c.Hotkeys.StopAll = combo; break;
                 case "global:toggleMini": c.Hotkeys.ToggleMini = combo; break;
+                case "global:muteMic": c.Hotkeys.MuteMic = combo; break;
+                case "global:ptt": c.Processing.PushToTalk.Key = combo; break;
                 default: throw new ArgumentOutOfRangeException(nameof(ownerKey));
             }
         });
@@ -497,8 +489,11 @@ public sealed class SoundboardController : IDisposable
             Notice?.Invoke($"{c2} couldn't be registered: {err}", true);
     }
 
+    private bool _disposed;
+
     public void Dispose()
     {
+        _disposed = true;
         _tick.Stop();
         _hotkeyLock.Dispose();
         _http?.Dispose();

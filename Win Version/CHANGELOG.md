@@ -1,5 +1,57 @@
 # Changelog — Bread Board (Win Version)
 
+## Iteration 4 — Mixer and Virtual Microphone (v0.5.0)
+
+### Added
+- **Microphone in the mix**: the mic now joins the virtual mic (on by default; Mixer → Devices → "Use microphone").
+- **Live mixer** (Mixer page): all four strips work: gain 0–200 %, mute, "To virtual mic" and "Monitor"
+  routing, dB level meters, status lines (device in use, muted, push-to-talk state, app state, virtual-mic state).
+  Master strip carries the **virtual mic on/off** switch (off = silence, meters keep working).
+- **Voice processing**: noise gate, compressor, limiter and voice ducking with on/off and amount, applied live.
+  The limiter is the clipping protection on everything sent to the virtual mic.
+- **Devices**: choose the microphone, the virtual-mic output (auto = VB-Audio cable) and the monitor (your
+  headphones), each with live status; buffer size 10 / 20 / 40 / 80 ms (all streams reopen on change).
+- **No cable? Still hear your sounds**: without a virtual-mic output, the monitor device now drives the mix
+  ("Monitor only"), fixing the Iteration 2 known issue.
+- **Push-to-talk**: mic only while the key is held. The key is watched, not taken: it still types and still
+  reaches your game (low-level keyboard hook, installed only while push-to-talk is on). Key set on Shortcuts.
+- **Mute microphone** global shortcut (Ctrl+Shift+M) and mini-player **Mic** / **Master** mute buttons.
+- Sidebar **Virtual Mic** switch and status; bottom bar shows all four meters (dB scale).
+- Device recovery and feedback prevention surface in the UI: unplugged devices show "not available" and are
+  reopened automatically; picking the cable's own capture side as the mic is refused ("Feedback loop");
+  the monitor can't be the virtual-mic output; the App channel can't be monitored (echo).
+- Meters pause while the window is minimised.
+
+### Changed
+- Settings v2 migration: "Hear sounds on this PC" became the mixer's monitor switch (kept in Settings too).
+- Switches react to any change (mouse, keyboard, screen readers / UI Automation), not only mouse clicks.
+
+### Fixed
+- Late engine events during shutdown no longer touch the disposed device list.
+
+### Tests (79 passing)
+- Settings migration; monitor tap mixes the monitor bus without a main output; every mixer/processing
+  setting reaches the engine.
+- Real devices (silent: monitor routed into the cable): monitor-only fallback is heard, a buffer-size
+  change keeps it working, switching back to the virtual-mic output works, and the cable's capture side is
+  refused as the microphone.
+- Push-to-talk: press/release reported once each (auto-repeat ignored) and the key still reaches another
+  listener.
+- App launch keeps the real microphone closed during automated runs.
+- Manual (UI Automation): mute mic (status + saved), virtual mic off (sidebar + master status + saved),
+  compressor on, gate 5 %, soundboard fader 120 %, buffer 40 ms, push-to-talk on — all applied and saved.
+
+### Performance (Release, 3 runs, 10 s idle, mic + virtual cable + monitor all running, meters live)
+| Metric | Result |
+|---|---|
+| First frame | 757–829 ms |
+| Idle CPU | 0.19–0.41 % |
+| Working set | ~125–133 MB |
+
+### Known issues
+- Windows standard: with a dropdown open, the first click/Alt+F4 closes the dropdown, the second the window.
+- The virtual cable on this PC runs at 32 kHz (Bread Board resamples); setting it to 48 kHz avoids that.
+
 ## Iteration 3 — App Audio (v0.4.0)
 
 Replaces the original "browser integration" iteration (decision: any app, no Web Player). Pick any running

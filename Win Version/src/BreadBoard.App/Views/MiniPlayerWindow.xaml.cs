@@ -61,6 +61,9 @@ public partial class MiniPlayerWindow : Window
         PlayButton.PreviewMouseLeftButtonUp += (_, _) => { if (Selected is { } s) _sb.Release(s.Id); };
         PlayButton.KeyDown += (_, e) => { if (e.Key is Key.Enter or Key.Space && !e.IsRepeat) { PlaySelected(); e.Handled = true; } };
         StopAllButton.Click += (_, _) => _sb.StopAll();
+        MicButton.Click += (_, _) => _sb.ToggleMicMute();
+        MasterButton.Click += (_, _) => _sb.ToggleMasterMute();
+        _sb.MixChanged += Refresh;
         _sb.LibraryChanged += Refresh;
         _sb.PlaybackTick += Refresh;
         _sb.EngineChanged += Refresh;
@@ -69,6 +72,7 @@ public partial class MiniPlayerWindow : Window
             _sb.LibraryChanged -= Refresh;
             _sb.PlaybackTick -= Refresh;
             _sb.EngineChanged -= Refresh;
+            _sb.MixChanged -= Refresh;
         };
         Refresh();
     }
@@ -129,6 +133,12 @@ public partial class MiniPlayerWindow : Window
         PlayButton.Content = stop ? Glyph.Stop : Glyph.Play;
         PlayButton.ToolTip = stop ? "Stop" : s is null ? "Play" : $"Play {s.Name}";
         EngineDot.Fill = (Brush)FindResource(_sb.EngineOk ? "OkBrush" : "MuteBrush");
+        var micMuted = _sb.Config.Channels.Mic.Muted;
+        MicButton.Content = micMuted ? "Mic muted" : "Mic";
+        MicButton.Foreground = (Brush)FindResource(micMuted ? "BadBrush" : "InkBrush");
+        var masterMuted = _sb.Config.Channels.Master.Muted;
+        MasterButton.Content = masterMuted ? "Muted" : "Master";
+        MasterButton.Foreground = (Brush)FindResource(masterMuted ? "BadBrush" : "InkBrush");
         EngineDot.ToolTip = _sb.EngineSummary;
     }
 

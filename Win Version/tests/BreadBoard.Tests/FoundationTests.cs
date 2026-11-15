@@ -85,6 +85,10 @@ public sealed class AppLifecycleTests : IDisposable
 
     private async Task<JsonElement> RunSmoke()
     {
+        // Keep the real microphone closed during automated runs.
+        Directory.CreateDirectory(_dir);
+        var cfgPath = Path.Combine(_dir, "config.json");
+        if (!File.Exists(cfgPath)) File.WriteAllText(cfgPath, """{"version":2,"devices":{"micEnabled":false}}""");
         var psi = new ProcessStartInfo(AppExe()) { ArgumentList = { "--data-dir", _dir, "--smoke-test" } };
         using var p = Process.Start(psi)!;
         await p.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(30));

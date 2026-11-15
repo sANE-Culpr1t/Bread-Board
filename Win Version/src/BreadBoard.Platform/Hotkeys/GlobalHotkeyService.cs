@@ -1,4 +1,4 @@
-﻿using System.Collections.Concurrent;
+using System.Collections.Concurrent;
 using System.Runtime.InteropServices;
 using BreadBoard.Core.Hotkeys;
 using BreadBoard.Core.Logging;
@@ -51,6 +51,41 @@ public sealed class GlobalHotkeyService : IDisposable
         return tcs.Task;
     }
 
+    /// <summary>
+    /// Watches one key without taking it away from other apps (push-to-talk: the key still types and still
+    /// reaches the game). Uses a low-level keyboard hook on this thread, installed only while a key is watched.
+    /// Pass null to stop. <paramref name="onChange"/> gets true on press and false on release.
+    /// </summary>
+    public void WatchKey(string? keyName, Action<bool>? onChange) => Invoke(() =>
+    {
+        if (_hook != 0) { UnhookWindowsHookEx(_hook); _hook = 0; }
+        _watch = null;
+        _watchDown = false;
+        if (keyName is null || onChange is null || VirtualKey(keyName) is not { } vk) return;
+        _watchVk = vk;
+        _watch = onChange;
+        _hookProc ??= HookCallback;
+        _hook = SetWindowsHookEx(WH_KEYBOARD_LL, _hookProc, GetModuleHandle(null), 0);
+        if (_hook == 0) Log.Warn($"Keyboard hook for {keyName} failed (error {Marshal.GetLastWin32Error()})");
+    });
+
+    private nint _hook;
+    private HookProc? _hookProc;
+    private uint _watchVk;
+    private Action<bool>? _watch;
+    private bool _watchDown;
+
+    private nint HookCallback(int code, nint wParam, nint lParam)
+    {
+        if (code >= 0 && _watch is { } watch && (uint)Marshal.ReadInt32(lParam) == _watchVk)
+        {
+            var msg = (uint)wParam;
+            if (msg is WM_KEYDOWN or WM_SYSKEYDOWN && !_watchDown) { _watchDown = true; Fire(() => watch(true)); }
+            else if (msg is WM_KEYUP or WM_SYSKEYUP && _watchDown) { _watchDown = false; Fire(() => watch(false)); }
+        }
+        return CallNextHookEx(_hook, code, wParam, lParam); // never swallow the key
+    }
+
     public void UnregisterAll() => Invoke(() =>
     {
         foreach (var id in _bindings.Keys) UnregisterHotKey(0, id);
@@ -85,6 +120,7 @@ public sealed class GlobalHotkeyService : IDisposable
             else if (msg.message == WM_QUIT) break;
         }
         foreach (var id in _bindings.Keys) UnregisterHotKey(0, id);
+        if (_hook != 0) UnhookWindowsHookEx(_hook);
     }
 
     private static async Task WatchRelease(uint vk, Action onUp)
@@ -147,6 +183,14 @@ public sealed class GlobalHotkeyService : IDisposable
 
     private const uint WM_HOTKEY = 0x0312, WM_APP = 0x8000, WM_QUIT = 0x0012, MOD_NOREPEAT = 0x4000;
     private const int ERROR_HOTKEY_ALREADY_REGISTERED = 1409;
+    private const int WH_KEYBOARD_LL = 13;
+    private const uint WM_KEYDOWN = 0x100, WM_KEYUP = 0x101, WM_SYSKEYDOWN = 0x104, WM_SYSKEYUP = 0x105;
+
+    private delegate nint HookProc(int code, nint wParam, nint lParam);
+    [DllImport("user32.dll", SetLastError = true)] private static extern nint SetWindowsHookEx(int id, HookProc proc, nint module, uint threadId);
+    [DllImport("user32.dll")] private static extern bool UnhookWindowsHookEx(nint hook);
+    [DllImport("user32.dll")] private static extern nint CallNextHookEx(nint hook, int code, nint wParam, nint lParam);
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode)] private static extern nint GetModuleHandle(string? name);
 
     [StructLayout(LayoutKind.Sequential)]
     private struct MSG { public nint hwnd; public uint message; public nuint wParam; public nint lParam; public uint time; public int ptX, ptY; }

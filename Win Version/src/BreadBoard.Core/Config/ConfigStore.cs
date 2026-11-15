@@ -26,7 +26,7 @@ public sealed class ConfigStore(string path)
         {
             using var s = File.OpenRead(Path);
             var cfg = JsonSerializer.Deserialize(s, ConfigJsonContext.Default.AppConfig);
-            return cfg ?? new AppConfig();
+            return cfg is null ? new AppConfig() : Migrate(cfg);
         }
         catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException)
         {
@@ -36,6 +36,20 @@ public sealed class ConfigStore(string path)
             Log.Error($"Config unreadable, using defaults (backup: {backup})", ex);
             return new AppConfig();
         }
+    }
+
+    /// <summary>Upgrades settings written by older versions.</summary>
+    public static AppConfig Migrate(AppConfig cfg)
+    {
+        if (cfg.Version < 2)
+        {
+            // v2: "Hear sounds on this PC" became the mixer's monitor output.
+            cfg.Devices.MonitorEnabled = cfg.Playback.HearOnThisPc;
+            Log.Info("Settings migrated to version 2");
+        }
+        if (!DeviceSettings.LatencyChoices.Contains(cfg.Devices.LatencyMs)) cfg.Devices.LatencyMs = 20;
+        cfg.Version = AppConfig.CurrentVersion;
+        return cfg;
     }
 
     /// <summary>Deep copy (used to hand the audio engine a snapshot it may adjust).</summary>

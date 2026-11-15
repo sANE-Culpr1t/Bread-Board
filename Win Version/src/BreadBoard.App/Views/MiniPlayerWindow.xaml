@@ -73,10 +73,10 @@
 
             <!-- Mic / master mute -->
             <UniformGrid Grid.Row="4" Rows="1" Margin="0,10,0,0">
-                <Button Style="{StaticResource SoftButton}" t:Ui.Icon="{x:Static t:Glyph.MicOff}" Content="Mic" Margin="0,0,6,0" IsEnabled="False"
-                        ToolTip="Muting the microphone goes live in Iteration 4." AutomationProperties.Name="Mute microphone"/>
-                <Button Style="{StaticResource SoftButton}" t:Ui.Icon="{x:Static t:Glyph.Mute}" Content="Master" Margin="6,0,0,0" IsEnabled="False"
-                        ToolTip="Muting the master output goes live in Iteration 4." AutomationProperties.Name="Mute master output"/>
+                <Button x:Name="MicButton" Style="{StaticResource SoftButton}" t:Ui.Icon="{x:Static t:Glyph.MicOff}" Content="Mic" Margin="0,0,6,0"
+                        ToolTip="Mute or unmute your microphone" AutomationProperties.Name="Mute microphone"/>
+                <Button x:Name="MasterButton" Style="{StaticResource SoftButton}" t:Ui.Icon="{x:Static t:Glyph.Mute}" Content="Master" Margin="6,0,0,0"
+                        ToolTip="Mute or unmute everything sent to the virtual mic" AutomationProperties.Name="Mute master output"/>
             </UniformGrid>
 
             <TextBlock Grid.Row="5" VerticalAlignment="Bottom" HorizontalAlignment="Center" FontSize="11" Foreground="{StaticResource MuteBrush}"

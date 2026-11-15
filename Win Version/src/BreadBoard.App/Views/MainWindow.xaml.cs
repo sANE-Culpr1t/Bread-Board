@@ -54,11 +54,53 @@ public partial class MainWindow : Window
         GamingButton.Unchecked += (_, _) => _mini?.Close();
 
         SourceInitialized += (_, _) => ApplyWindowFrame();
-        ContentRendered += (_, _) =>
+        ContentRendered += async (_, _) =>
         {
             Log.Info($"Main window rendered after {(DateTime.Now - Process.GetCurrentProcess().StartTime).TotalMilliseconds:0} ms");
             if (_host.Config.Current.Ui.MiniOpenOnStart && !host.Options.IsAutomated) GamingButton.IsChecked = true;
+            await _host.Soundboard.InitializeAsync();
         };
+
+        var sb = _host.Soundboard;
+        sb.Notice += ShowToast;
+        sb.EngineChanged += UpdateEngineStatus;
+        sb.PlaybackTick += () => BoardMeter.Value = Math.Min(1, sb.SoundboardLevel);
+        sb.ToggleMiniRequested = () => { if (_mini is null) ShowMini(); else _mini.Close(); };
+        Toast.MouseLeftButtonUp += (_, _) => HideToast();
+        _toastTimer.Tick += (_, _) => HideToast();
+    }
+
+    private readonly System.Windows.Threading.DispatcherTimer _toastTimer = new() { Interval = TimeSpan.FromSeconds(4.5) };
+
+    /// <summary>Brief message over the page (errors stay a little longer).</summary>
+    public void ShowToast(string text, bool error)
+    {
+        ToastText.Text = text;
+        ToastIcon.Text = error ? "\uE7BA" : "\uE73E";
+        ToastIcon.Foreground = (System.Windows.Media.Brush)FindResource(error ? "BadBrush" : "OkBrush");
+        Toast.Visibility = Visibility.Visible;
+        Toast.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(120)));
+        _toastTimer.Interval = TimeSpan.FromSeconds(error ? 7 : 4);
+        _toastTimer.Stop();
+        _toastTimer.Start();
+        Log.Info($"Toast ({(error ? "error" : "info")}): {text}");
+    }
+
+    private void HideToast()
+    {
+        _toastTimer.Stop();
+        Toast.Visibility = Visibility.Collapsed;
+    }
+
+    private void UpdateEngineStatus()
+    {
+        var sb = _host.Soundboard;
+        EngineTitle.Text = sb.EngineOk ? "Soundboard live" : "Audio output problem";
+        EngineDetail.Text = sb.EngineSummary;
+        EngineDetail.ToolTip = sb.EngineSummary;
+        VmDot.Fill = (System.Windows.Media.Brush)FindResource(sb.EngineOk ? "OkBrush" : "BadBrush");
+        VmStatus.Text = sb.EngineOk ? "Sending sounds" : "Not connected";
+        VmCard.ToolTip = sb.EngineSummary;
     }
 
     public MiniPlayerWindow? MiniPlayer => _mini;
@@ -75,7 +117,7 @@ public partial class MainWindow : Window
     {
         if (_mini is null)
         {
-            _mini = new MiniPlayerWindow(_host.Config);
+            _mini = new MiniPlayerWindow(_host.Config, _host.Soundboard);
             _mini.Closed += (_, _) => { _mini = null; GamingButton.IsChecked = false; };
             _mini.Show();
         }
@@ -112,10 +154,10 @@ public partial class MainWindow : Window
 
     private FrameworkElement CreatePage(PageId id) => id switch
     {
-        PageId.Soundboard => new SoundboardPage(),
+        PageId.Soundboard => new SoundboardPage(_host.Soundboard),
         PageId.Mixer => new MixerPage(_host.Config),
-        PageId.Shortcuts => new ShortcutsPage(),
-        PageId.Settings => new SettingsPage(_host.Config, this),
+        PageId.Shortcuts => new ShortcutsPage(_host.Soundboard),
+        PageId.Settings => new SettingsPage(_host.Config, this, _host.Soundboard),
         _ => throw new ArgumentOutOfRangeException(nameof(id)),
     };
 

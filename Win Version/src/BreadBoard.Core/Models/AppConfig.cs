@@ -85,6 +85,8 @@ public sealed class PlaybackSettings
 {
     public bool AllowStacking { get; set; } = true;
     public int MaxVoices { get; set; } = 8;
+    /// <summary>Also play sounds on this PC's default speakers/headphones so you hear them.</summary>
+    public bool HearOnThisPc { get; set; } = true;
 }
 
 public sealed class GlobalHotkeys
@@ -124,6 +126,8 @@ public sealed class AppConfig
     public UiSettings Ui { get; set; } = new();
     public List<SoundEntry> Sounds { get; set; } = [];
     public List<string> Categories { get; set; } = ["Memes", "Reactions", "Effects", "Music"];
+    /// <summary>Most recently played sound IDs, newest first.</summary>
+    public List<string> Recent { get; set; } = [];
     public ChannelSet Channels { get; set; } = new();
     public ProcessingSettings Processing { get; set; } = new();
     public DeviceSettings Devices { get; set; } = new();

@@ -38,6 +38,10 @@ public sealed class ConfigStore(string path)
         }
     }
 
+    /// <summary>Deep copy (used to hand the audio engine a snapshot it may adjust).</summary>
+    public static AppConfig Clone(AppConfig config) =>
+        JsonSerializer.Deserialize(JsonSerializer.SerializeToUtf8Bytes(config, ConfigJsonContext.Default.AppConfig), ConfigJsonContext.Default.AppConfig)!;
+
     public void Save(AppConfig config)
     {
         Directory.CreateDirectory(System.IO.Path.GetDirectoryName(Path)!);

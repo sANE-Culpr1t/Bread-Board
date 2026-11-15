@@ -14,7 +14,7 @@ namespace BreadBoard.App.Views.Pages;
 /// </summary>
 public sealed class SettingsPage : UserControl
 {
-    public SettingsPage(ConfigService config, MainWindow window)
+    public SettingsPage(ConfigService config, MainWindow window, Services.SoundboardController sb)
     {
         var ui = config.Current.Ui;
         var root = new StackPanel();
@@ -39,13 +39,42 @@ public sealed class SettingsPage : UserControl
         root.Children.Add(Card(gaming));
 
         root.Children.Add(SectionTitle("Playback"));
+        var pb = config.Current.Playback;
         var playback = new StackPanel();
-        playback.Children.Add(Row("Allow sound stacking", "Pressing a sound again plays another copy over it.",
-            Switch(config.Current.Playback.AllowStacking, false, "Arrives in Iteration 2.")));
-        playback.Children.Add(Row("Maximum simultaneous sounds", "The oldest sound stops when the limit is reached.",
-            new Slider { Width = 180, Minimum = 1, Maximum = 16, Value = config.Current.Playback.MaxVoices, IsEnabled = false, ToolTip = "Arrives in Iteration 2." }));
-        playback.Children.Add(Row("Missing files", "What to do when a sound's file was moved or deleted.",
-            Pending("Iteration 2"), last: true));
+        var hear = Switch(pb.HearOnThisPc, true, "Play sounds on your default speakers or headphones as well as the virtual mic");
+        hear.Click += async (_, _) =>
+        {
+            config.Update(c => c.Playback.HearOnThisPc = hear.IsChecked == true);
+            await sb.ApplyPlaybackSettingsAsync(devices: true);
+        };
+        playback.Children.Add(Row("Hear sounds on this PC", "Also plays them on your default speakers or headphones, so you hear what others hear.", hear));
+        var stacking = Switch(pb.AllowStacking, true, "Pressing a one-shot sound again plays another copy over it");
+        stacking.Click += async (_, _) =>
+        {
+            config.Update(c => c.Playback.AllowStacking = stacking.IsChecked == true);
+            await sb.ApplyPlaybackSettingsAsync();
+        };
+        playback.Children.Add(Row("Allow sound stacking", "Pressing a one-shot sound again plays another copy over it; otherwise it restarts.", stacking));
+        var voices = new Slider { Width = 160, Minimum = 1, Maximum = 16, Value = pb.MaxVoices, IsSnapToTickEnabled = true, TickFrequency = 1 };
+        var voicesText = Text($"{pb.MaxVoices}", 14);
+        voicesText.Width = 28;
+        voicesText.TextAlignment = TextAlignment.Right;
+        voices.ValueChanged += (_, _) =>
+        {
+            var v = (int)voices.Value;
+            voicesText.Text = v.ToString(System.Globalization.CultureInfo.CurrentCulture);
+            config.Update(c => c.Playback.MaxVoices = v);
+            _ = sb.ApplyPlaybackSettingsAsync();
+        };
+        var voicesRow = new StackPanel { Orientation = Orientation.Horizontal };
+        voicesRow.Children.Add(voices);
+        voicesRow.Children.Add(voicesText);
+        playback.Children.Add(Row("Maximum simultaneous sounds", "The oldest sound stops when the limit is reached.", voicesRow));
+        var output = Text(sb.EngineSummary, 13, muted: true);
+        output.MaxWidth = 320;
+        output.TextAlignment = TextAlignment.Right;
+        sb.EngineChanged += () => output.Text = sb.EngineSummary;
+        playback.Children.Add(Row("Output", "In Discord or your game, pick CABLE Output as the microphone. Choosing devices arrives in Iteration 4.", output, last: true));
         root.Children.Add(Card(playback));
 
         root.Children.Add(SectionTitle("Profiles"));

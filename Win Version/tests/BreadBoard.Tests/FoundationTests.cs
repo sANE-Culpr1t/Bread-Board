@@ -99,9 +99,24 @@ public sealed class AppLifecycleTests : IDisposable
         Assert.Equal(4, first.GetProperty("pagesVisited").GetArrayLength());
         Assert.True(first.GetProperty("miniOpened").GetBoolean());
         Assert.True(first.GetProperty("miniTopmost").GetBoolean()); // default: keep on top
-        Assert.False(first.GetProperty("audioCreated").GetBoolean());   // heavy modules stay unloaded
-        Assert.False(first.GetProperty("hotkeysCreated").GetBoolean());
+        Assert.False(first.GetProperty("audioAtStart").GetBoolean());   // no sounds yet → audio engine not started
+        Assert.True(first.GetProperty("hotkeysCreated").GetBoolean());  // global shortcuts are registered at startup
         Assert.False(first.GetProperty("webView2Loaded").GetBoolean());
+
+        // Import → shortcut → play → stop → remove, through the real engine.
+        var sound = first.GetProperty("sound");
+        Assert.True(sound.GetProperty("imported").GetBoolean());
+        Assert.Equal("Ready", sound.GetProperty("state").GetString());
+        Assert.InRange(sound.GetProperty("durationMs").GetDouble(), 950, 1050);
+        Assert.Equal("Ctrl+Alt+Shift+F24", sound.GetProperty("hotkey").GetString());
+        Assert.Equal(JsonValueKind.Null, sound.GetProperty("hotkeyError").ValueKind);
+        if (sound.GetProperty("engineOk").GetBoolean()) // needs the virtual cable; true on the dev PC
+        {
+            Assert.True(sound.GetProperty("played").GetBoolean());
+            Assert.True(sound.GetProperty("progressed").GetBoolean());
+            Assert.True(sound.GetProperty("stopped").GetBoolean());
+        }
+        Assert.True(sound.GetProperty("removed").GetBoolean());
 
         var log = string.Join('\n', Directory.GetFiles(Path.Combine(_dir, "Logs"), "*.jsonl").Select(File.ReadAllText));
         Assert.Contains("Shutdown complete", log);

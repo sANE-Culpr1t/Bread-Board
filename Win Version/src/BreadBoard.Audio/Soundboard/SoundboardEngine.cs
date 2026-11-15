@@ -15,6 +15,8 @@ public sealed class SoundboardEngine
         public readonly SoundClip Clip = clip;
         public volatile PlayMode Mode = mode;
         public volatile float Volume = volume;
+        /// <summary>Sample position of the most recently rendered voice (written by the audio thread).</summary>
+        public volatile int Position;
     }
 
     private sealed class Voice(Entry entry, bool loop)
@@ -46,6 +48,10 @@ public sealed class SoundboardEngine
 
     public bool IsRegistered(string id) => _entries.ContainsKey(id);
 
+    /// <summary>0–1 position of the sound's newest voice; meaningful while it is in <see cref="Playing"/>.</summary>
+    public double GetProgress(string id) =>
+        _entries.TryGetValue(id, out var e) && e.Clip.Samples.Length > 0 ? (double)e.Position / e.Clip.Samples.Length : 0;
+
     public void Update(string id, PlayMode mode, int volumePercent)
     {
         if (!_entries.TryGetValue(id, out var e)) return;
@@ -68,6 +74,7 @@ public sealed class SoundboardEngine
     {
         var changed = ApplyCommands();
         output.Clear();
+        for (var v = 0; v < _voices.Count; v++) _voices[v].Entry.Position = _voices[v].Position; // oldest first, newest wins
         for (var v = _voices.Count - 1; v >= 0; v--)
         {
             var voice = _voices[v];

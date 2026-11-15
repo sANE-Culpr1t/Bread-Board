@@ -116,6 +116,24 @@ public sealed class GlobalHotkeyService : IDisposable
         };
     }
 
+    /// <summary>Reverse of <see cref="VirtualKey"/>: the shared key name for a virtual-key code, or null if unsupported.</summary>
+    public static string? KeyName(uint vk)
+    {
+        if (vk is >= 0x30 and <= 0x39 or >= 0x41 and <= 0x5A) return ((char)vk).ToString();
+        if (vk is >= 0x60 and <= 0x69) return $"Num{vk - 0x60}";
+        if (vk is >= 0x70 and <= 0x87) return $"F{vk - 0x70 + 1}";
+        foreach (var name in NamedKeys)
+            if (VirtualKey(name) == vk) return name;
+        return null;
+    }
+
+    private static readonly string[] NamedKeys =
+    [
+        "Space", "Enter", "Tab", "Esc", "Backspace", "Insert", "Delete", "Home", "End", "PageUp", "PageDown",
+        "Up", "Down", "Left", "Right", "NumPlus", "NumMinus", "NumMul", "NumDiv", "NumDot", "Pause", "ScrollLock",
+        "`", "-", "=", "[", "]", "\\", ";", "'", ",", ".", "/",
+    ];
+
     private static uint Mods(HotkeyModifiers m) =>
         (m.HasFlag(HotkeyModifiers.Alt) ? 1u : 0) | (m.HasFlag(HotkeyModifiers.Ctrl) ? 2u : 0) |
         (m.HasFlag(HotkeyModifiers.Shift) ? 4u : 0) | (m.HasFlag(HotkeyModifiers.Win) ? 8u : 0);

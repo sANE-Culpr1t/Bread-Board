@@ -23,7 +23,11 @@ public sealed class AppHost
         Options = options;
         Config = new ConfigService(new ConfigStore(AppPaths.ConfigFile));
         Navigation = new NavigationService(Config);
+        Soundboard = new Services.SoundboardController(this, System.Windows.Threading.Dispatcher.CurrentDispatcher);
     }
+
+    /// <summary>Sound library, playback and shortcuts (UI thread).</summary>
+    public Services.SoundboardController Soundboard { get; }
 
     public StartupOptions Options { get; }
     public ConfigService Config { get; }
@@ -40,6 +44,7 @@ public sealed class AppHost
     {
         if (Interlocked.Exchange(ref _shutdown, 1) == 1) return;
         Log.Info("Shutdown started");
+        Step("soundboard", Soundboard.Dispose);
         if (_hotkeys.IsValueCreated) Step("hotkeys", () => _hotkeys.Value.Dispose());
         if (_audio.IsValueCreated)
         {

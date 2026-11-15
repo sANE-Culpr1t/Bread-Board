@@ -74,13 +74,13 @@
                         <Border x:Name="VmCard" Style="{StaticResource FlatCard}" Padding="14,12" CornerRadius="14">
                             <DockPanel>
                                 <CheckBox DockPanel.Dock="Right" Style="{StaticResource Switch}" IsEnabled="False" VerticalAlignment="Center"
-                                          ToolTip="Routing into the virtual cable arrives in Iteration 4."/>
+                                          ToolTip="Switching the virtual mic on and off arrives in Iteration 4."/>
                                 <StackPanel x:Name="VmText" VerticalAlignment="Center">
                                     <StackPanel Orientation="Horizontal">
-                                        <Ellipse Width="9" Height="9" Fill="{StaticResource MuteBrush}" Margin="0,0,8,0"/>
+                                        <Ellipse x:Name="VmDot" Width="9" Height="9" Fill="{StaticResource MuteBrush}" Margin="0,0,8,0"/>
                                         <TextBlock Text="Virtual Mic" FontWeight="SemiBold" FontSize="13"/>
                                     </StackPanel>
-                                    <TextBlock Text="Not connected" Margin="17,1,0,0" FontSize="12" Foreground="{StaticResource MuteBrush}"/>
+                                    <TextBlock x:Name="VmStatus" Text="Not connected" Margin="17,1,0,0" FontSize="12" Foreground="{StaticResource MuteBrush}" TextTrimming="CharacterEllipsis"/>
                                 </StackPanel>
                             </DockPanel>
                         </Border>
@@ -129,9 +129,19 @@
 
                 <ContentControl Grid.Row="1" x:Name="PageHost" Focusable="False" Margin="28,6,28,0"/>
 
+                <!-- Toast: short confirmations and errors, bottom-centre over the page. -->
+                <Border x:Name="Toast" Grid.Row="1" VerticalAlignment="Bottom" HorizontalAlignment="Center" Margin="40,0,40,16" MaxWidth="640"
+                        CornerRadius="14" Padding="16,11" Background="{StaticResource RaisedBrush}" BorderThickness="1" BorderBrush="{StaticResource LineBrush}"
+                        Visibility="Collapsed" Cursor="Hand" ToolTip="Click to dismiss">
+                    <Border.Effect><DropShadowEffect BlurRadius="24" ShadowDepth="4" Opacity="0.45" Color="Black"/></Border.Effect>
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock x:Name="ToastIcon" Style="{StaticResource Icon}" FontSize="15" Margin="0,0,10,0" VerticalAlignment="Center"/>
+                        <TextBlock x:Name="ToastText" TextWrapping="Wrap" VerticalAlignment="Center" MaxWidth="580"/>
+                    </StackPanel>
+                </Border>
+
                 <!-- Bottom audio section: levels per source + engine status. -->
-                <Border Grid.Row="2" Style="{StaticResource FlatCard}" Margin="28,16,28,22" Padding="20,14"
-                        ToolTip="Live levels arrive with the mixer in Iteration 4.">
+                <Border Grid.Row="2" Style="{StaticResource FlatCard}" Margin="28,16,28,22" Padding="20,14">
                     <Grid>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto"/>
@@ -140,19 +150,19 @@
                         </Grid.ColumnDefinitions>
                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,24,0">
                             <TextBlock Text="{x:Static t:Glyph.Waveform}" Style="{StaticResource Icon}" FontSize="22" Foreground="{StaticResource Accent2Brush}" Margin="0,0,12,0"/>
-                            <StackPanel>
-                                <TextBlock Text="Audio engine offline" FontWeight="SemiBold"/>
-                                <TextBlock Text="Connects in Iteration 4" FontSize="12" Foreground="{StaticResource MuteBrush}"/>
+                            <StackPanel MaxWidth="230">
+                                <TextBlock x:Name="EngineTitle" Text="Audio engine idle" FontWeight="SemiBold"/>
+                                <TextBlock x:Name="EngineDetail" Text="Starts when you add a sound" FontSize="12" Foreground="{StaticResource MuteBrush}" TextTrimming="CharacterEllipsis"/>
                             </StackPanel>
                         </StackPanel>
                         <UniformGrid Grid.Column="1" Rows="1" VerticalAlignment="Center">
                             <UniformGrid.Resources>
                                 <Style TargetType="TextBlock"><Setter Property="FontSize" Value="12"/><Setter Property="Foreground" Value="{StaticResource MuteBrush}"/><Setter Property="Margin" Value="0,0,0,5"/></Style>
                             </UniformGrid.Resources>
-                            <StackPanel Margin="0,0,16,0"><TextBlock Text="Microphone"/><ProgressBar Style="{StaticResource Meter}" Value="0"/></StackPanel>
-                            <StackPanel Margin="0,0,16,0"><TextBlock Text="App audio"/><ProgressBar Style="{StaticResource Meter}" Value="0"/></StackPanel>
-                            <StackPanel Margin="0,0,16,0"><TextBlock Text="Soundboard"/><ProgressBar Style="{StaticResource Meter}" Value="0"/></StackPanel>
-                            <StackPanel Margin="0,0,16,0"><TextBlock Text="Master"/><ProgressBar Style="{StaticResource Meter}" Value="0"/></StackPanel>
+                            <StackPanel Margin="0,0,16,0" ToolTip="Microphone level arrives with the mixer in Iteration 4."><TextBlock Text="Microphone"/><ProgressBar Style="{StaticResource Meter}" Value="0"/></StackPanel>
+                            <StackPanel Margin="0,0,16,0" ToolTip="App audio level arrives in Iterations 3–4."><TextBlock Text="App audio"/><ProgressBar Style="{StaticResource Meter}" Value="0"/></StackPanel>
+                            <StackPanel Margin="0,0,16,0" ToolTip="Live level of the soundboard"><TextBlock Text="Soundboard"/><ProgressBar x:Name="BoardMeter" Style="{StaticResource Meter}" Maximum="1" Value="0"/></StackPanel>
+                            <StackPanel Margin="0,0,16,0" ToolTip="Master level arrives with the mixer in Iteration 4."><TextBlock Text="Master"/><ProgressBar Style="{StaticResource Meter}" Value="0"/></StackPanel>
                         </UniformGrid>
                         <Border Grid.Column="2" CornerRadius="16" Background="{StaticResource RaisedBrush}" Padding="14,7" VerticalAlignment="Center">
                             <StackPanel Orientation="Horizontal">

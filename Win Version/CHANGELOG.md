@@ -1,5 +1,62 @@
 # Changelog — Bread Board (Win Version)
 
+## Iteration 2 — Soundboard and Global Hotkeys (v0.3.0)
+
+### Added
+- **Sound library** (`Core/Sounds/SoundLibrary`): import WAV/MP3/OGG (copied into the library so moving the
+  original doesn't break a pad), add from a Myinstants page or direct link, edit, remove (deletes only the
+  library copy, never files elsewhere), favourites, recently played (newest first, 12 kept), categories
+  (pick or type a new one), relocate a missing file.
+- **Soundboard page**: real pads with name, shortcut, duration, mode, live progress, favourite and problem
+  badges; click / Enter / Space to play, hold-mode sounds play while the mouse or key is held; right-click
+  menu (Play/Stop, Edit, Favourite, Show file, Locate file, Remove with confirmation); drag-and-drop files to
+  import; filters All / Favourites / Recent / per category / Missing files; Stop all button; search.
+- **Add / Edit sound dialog**: from file or from website, name, category, play mode (one-shot, toggle, loop,
+  hold) with explanation, shortcut recorder, per-sound volume, icon and colour, favourite.
+- **Global shortcuts** registered at startup (RegisterHotKey, no polling): every sound's shortcut plus
+  Stop all and Toggle mini-player. Duplicates and reserved combos (Alt+F4, Win+…) are refused in the editor;
+  combos another program already owns are reported on the pad, on the Shortcuts page and in a message.
+  Shortcuts pause while you record a new one. Mute mic and push-to-talk are listed for Iteration 4.
+- **Shortcuts page**: every shortcut, whether Windows accepted it, and Set/Change.
+- **Playback engine wiring** (`Services/SoundboardController`): the audio engine starts only once the
+  library has sounds; sounds go to the virtual cable and, optionally, your default speakers ("Hear sounds on
+  this PC"). Clips are decoded once in the background. Mic and app capture stay off until Iterations 3–4.
+- **Settings → Playback**: hear on this PC, allow stacking, maximum simultaneous sounds, output status.
+- **Mini-player**: Previous/Next step through favourites (or all sounds), Play/Stop the selected sound with
+  its progress, Stop all, live engine dot.
+- **Main window**: live Soundboard meter, engine status in the bottom bar and Virtual Mic card, message toasts.
+
+### Missing and broken files
+- A sound whose file is gone shows as dimmed with a warning, is listed under "Missing files", and can't be
+  triggered (a message explains why); right-click → Locate file… fixes it. Files that can't be decoded are
+  rejected at import instead of leaving a broken pad.
+
+### Tests (60 passing)
+- Library: import/copy/no-overwrite, unsupported and missing files, edit normalisation, remove (library copy
+  only), recent ordering and cap, favourites, missing detection + relocate, persistence across restart.
+- Playback: decode to 48 kHz stereo, unsupported format, simultaneous sounds mix, 500 rapid triggers stay
+  within the voice limit, stop all / stop one, progress, live mode and volume changes, unknown sound ignored.
+- Hotkeys: key-name round trip, reserved combos, conflict with another program and release, a real key press
+  delivered system-wide (works while another window has focus, i.e. while minimised) including hold release.
+- App launch: imports a generated sound, assigns a shortcut, plays it through the real engine, sees progress,
+  stops it, removes it.
+- Manual (UI Automation on the real app): Add Sound dialog opens; shortcut recorder captures Ctrl+Shift+K from
+  real key presses; Alt+F4 is refused with a message and doesn't close the dialog; a Myinstants link is
+  downloaded and named automatically; the new sound's global shortcut plays it; settings are saved.
+
+### Performance (Release, 3 runs, 10 s idle)
+| Metric | Empty library | 9 sounds (engine running) |
+|---|---|---|
+| First frame | 729–805 ms | 766–1283 ms |
+| Idle CPU | 0.01–0.04 % | 0.13–0.37 % |
+| Working set | ~114–116 MB | ~144–150 MB |
+
+### Known issues
+- Without a virtual cable nothing plays, not even on your speakers (the cable output drives the mix).
+  Iteration 4 adds device choice and monitor-only playback.
+- On this PC, Ctrl+Alt+Shift+F17–F21 are owned by another program; Bread Board reports this correctly.
+- Sounds longer than 3 minutes are cut at 3 minutes (memory cap); not yet shown in the UI.
+
 ## Iteration 1 — Main UI and Navigation (v0.2.0)
 
 Decision: no Web Player. "Browser audio" became **App Audio** — capture any running app's window

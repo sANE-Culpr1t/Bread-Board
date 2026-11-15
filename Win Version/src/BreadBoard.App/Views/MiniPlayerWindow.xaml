@@ -36,8 +36,7 @@
                     <!-- Logo placeholder (Iteration 6) -->
                     <Border Width="24" Height="24" CornerRadius="6" BorderThickness="1.2" BorderBrush="{StaticResource LineBrush}" Margin="0,0,10,0"/>
                     <TextBlock Text="Bread Board" FontWeight="SemiBold" VerticalAlignment="Center"/>
-                    <Ellipse Width="8" Height="8" Fill="{StaticResource MuteBrush}" Margin="10,0,0,0" VerticalAlignment="Center"
-                             ToolTip="Virtual mic: not connected (Iteration 4)"/>
+                    <Ellipse x:Name="EngineDot" Width="8" Height="8" Fill="{StaticResource MuteBrush}" Margin="10,0,0,0" VerticalAlignment="Center"/>
                 </StackPanel>
             </DockPanel>
         </Border>
@@ -48,39 +47,39 @@
                 <RowDefinition Height="Auto"/>
                 <RowDefinition Height="Auto"/>
                 <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
                 <RowDefinition Height="*"/>
             </Grid.RowDefinitions>
 
-            <!-- Transport -->
+            <!-- Transport: step through favourites (or all sounds) and play the selected one -->
             <StackPanel Grid.Row="0" Orientation="Horizontal" HorizontalAlignment="Center">
-                <StackPanel.Resources>
-                    <Style TargetType="Button" BasedOn="{StaticResource IconButton}">
-                        <Setter Property="IsEnabled" Value="False"/>
-                        <Setter Property="ToolTip" Value="Playback controls go live in Iteration 2."/>
-                    </Style>
-                </StackPanel.Resources>
-                <Button Content="{x:Static t:Glyph.Previous}" Background="Transparent" AutomationProperties.Name="Previous sound"/>
-                <Button Content="{x:Static t:Glyph.Play}" Width="64" Height="64" FontSize="24" Margin="20,0" t:Ui.CornerRadius="32"
-                        Background="{StaticResource CardBrush}" AutomationProperties.Name="Play"/>
-                <Button Content="{x:Static t:Glyph.Next}" Background="Transparent" AutomationProperties.Name="Next sound"/>
+                <Button x:Name="PrevButton" Style="{StaticResource IconButton}" Content="{x:Static t:Glyph.Previous}" Background="Transparent"
+                        AutomationProperties.Name="Previous sound" ToolTip="Previous sound"/>
+                <Button x:Name="PlayButton" Style="{StaticResource IconButton}" Content="{x:Static t:Glyph.Play}" Width="64" Height="64" FontSize="24" Margin="20,0"
+                        t:Ui.CornerRadius="32" Background="{StaticResource CardBrush}" AutomationProperties.Name="Play" ToolTip="Play"/>
+                <Button x:Name="NextButton" Style="{StaticResource IconButton}" Content="{x:Static t:Glyph.Next}" Background="Transparent"
+                        AutomationProperties.Name="Next sound" ToolTip="Next sound"/>
             </StackPanel>
 
-            <!-- Current sound -->
+            <!-- Selected sound -->
             <StackPanel Grid.Row="1" Margin="0,16,0,0" HorizontalAlignment="Center">
-                <TextBlock Text="Nothing playing" FontSize="15" FontWeight="Medium" HorizontalAlignment="Center"/>
-                <TextBlock Text="Your sounds appear here in Iteration 2" FontSize="12" Foreground="{StaticResource MuteBrush}" HorizontalAlignment="Center"/>
+                <TextBlock x:Name="NowTitle" Text="No sounds yet" FontSize="15" FontWeight="Medium" HorizontalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                <TextBlock x:Name="NowDetail" Text="Add sounds in the main window" FontSize="12" Foreground="{StaticResource MuteBrush}" HorizontalAlignment="Center"/>
             </StackPanel>
-            <ProgressBar Grid.Row="2" Style="{StaticResource Meter}" Value="0" Margin="0,14,0,0" Foreground="{StaticResource AccentBrush}"/>
+            <ProgressBar x:Name="NowProgress" Grid.Row="2" Style="{StaticResource Meter}" Maximum="1" Value="0" Margin="0,14,0,0" Foreground="{StaticResource AccentBrush}"/>
+
+            <Button x:Name="StopAllButton" Grid.Row="3" Style="{StaticResource SoftButton}" t:Ui.Icon="{x:Static t:Glyph.Stop}" Content="Stop all"
+                    Margin="0,16,0,0" HorizontalAlignment="Stretch" ToolTip="Stop every sound that is playing"/>
 
             <!-- Mic / master mute -->
-            <UniformGrid Grid.Row="3" Rows="1" Margin="0,16,0,0">
+            <UniformGrid Grid.Row="4" Rows="1" Margin="0,10,0,0">
                 <Button Style="{StaticResource SoftButton}" t:Ui.Icon="{x:Static t:Glyph.MicOff}" Content="Mic" Margin="0,0,6,0" IsEnabled="False"
                         ToolTip="Muting the microphone goes live in Iteration 4." AutomationProperties.Name="Mute microphone"/>
                 <Button Style="{StaticResource SoftButton}" t:Ui.Icon="{x:Static t:Glyph.Mute}" Content="Master" Margin="6,0,0,0" IsEnabled="False"
                         ToolTip="Muting the master output goes live in Iteration 4." AutomationProperties.Name="Mute master output"/>
             </UniformGrid>
 
-            <TextBlock Grid.Row="4" VerticalAlignment="Bottom" HorizontalAlignment="Center" FontSize="11" Foreground="{StaticResource MuteBrush}"
+            <TextBlock Grid.Row="5" VerticalAlignment="Bottom" HorizontalAlignment="Center" FontSize="11" Foreground="{StaticResource MuteBrush}"
                        Text="Drag the header to move · drag an edge to resize"/>
         </Grid>
     </Grid>

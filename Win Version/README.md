@@ -10,17 +10,17 @@ dotnet run --project src/BreadBoard.App
 
 Release build: `dotnet publish src/BreadBoard.App -c Release -o artifacts/release` → `artifacts/release/BreadBoard.exe`.
 
-App switches (for testing): `--data-dir <folder>` keep all data in one folder · `--smoke-test` · `--perf <seconds>`.
+App switches (for testing): `--data-dir <folder>` keep all data in one folder · `--smoke-test` · `--perf <seconds>` · `--screenshots <folder>`.
 
 Module layout:
 
 | Project | Responsibility |
 |---|---|
-| BreadBoard.App | Startup/lifecycle (`Lifecycle/`), UI and navigation (`Views/`, `Navigation/`, `Theme/`), diagnostics |
+| BreadBoard.App | Startup/lifecycle (`Lifecycle/`), soundboard controller (`Services/`), UI and navigation (`Views/`, `Navigation/`, `Theme/`), diagnostics |
 | BreadBoard.Core | Configuration and persistence, logging, hotkey rules, web-link rules (no Windows APIs) |
 | BreadBoard.Audio | Audio engine and audio device management |
 | BreadBoard.Platform | Global hotkeys, single instance (Win32) |
-| Browser integration | Planned as its own module in Iteration 3 (WebView2, loaded on first use) |
+| App Audio | Iteration 3: pick any running app's window and capture its audio (process loopback); no Web Player |
 | BreadBoard.Cli | `bb` test host for the audio engine |
 
 ## Requirements
@@ -62,6 +62,7 @@ src/BreadBoard.Core     (net10.0, no audio deps)
   Logging/Log           non-blocking daily file log
   Hotkeys/              hotkey parsing, reserved/duplicate rules
   Sounds/SoundLink      which web links can be imported
+  Sounds/SoundLibrary   import (copied into the library), rename/edit, remove, favourites, recent, categories, relocate
 
 src/BreadBoard.Audio    (NAudio 3.3 + NVorbis)
   AudioHost             owns the graph; applies settings; restarts failed parts (device unplugged, app closed)
@@ -94,13 +95,13 @@ through volatile fields and a command queue; live inputs are held ~40 ms behind 
   process loopback capture working (rms 0.22), virtual-mic switch sends silence.
 - `bb probe --app brave`: Brave's YouTube audio captured and heard on CABLE Output (rms 0.13), mic running.
 - `bb download <myinstants link>`: file found, downloaded and decoded.
-- `dotnet test`: 32 passing.
+- `dotnet test`: 60 passing (includes a real launch that imports, plays, stops and removes a sound).
 
-Global hotkeys: `Input/GlobalHotkeyService` (RegisterHotKey on its own message thread; hold-to-play watches the
+Global hotkeys: `Platform/Hotkeys/GlobalHotkeyService` (RegisterHotKey on its own message thread; hold-to-play watches the
 key only while it is held). `bb run` binds each sound's hotkey, or Num1–Num9 by default, plus Stop all / Mute mic.
 
 Tip: set VB-Cable to 48 kHz (Sound settings → "CABLE Input"/"Speakers (VB-Audio…)" and "CABLE Output" →
 Properties → Advanced → 2 channel, 24 bit, 48000 Hz). At other rates Bread Board resamples, which costs a little quality.
 
-Not yet built: WPF UI, mini-player window, profiles UI.
+Not yet built: App Audio picker (Iteration 3), live mixer/devices/virtual-mic switch (Iteration 4), profiles (Iteration 5).
 Not yet tested: Discord / Valorant / OBS end to end (in progress), long-running stability.

@@ -1,5 +1,5 @@
 import { motion } from 'motion/react';
-import { Gamepad2, Globe, Heart, Keyboard, LayoutGrid, Palette, Settings, SlidersHorizontal, type LucideIcon } from 'lucide-react';
+import { Gamepad2, Heart, Keyboard, LayoutGrid, Palette, Settings, SlidersHorizontal, type LucideIcon } from 'lucide-react';
 import type { PageId } from '../types';
 import { useApp } from '../state/AppStore';
 import { cx, patchMini } from '../lib/util';
@@ -8,7 +8,6 @@ import { Toggle } from './ui';
 
 const NAV: { id: PageId; label: string; icon: LucideIcon }[] = [
   { id: 'soundboard', label: 'Soundboard', icon: LayoutGrid },
-  { id: 'web', label: 'Web Player', icon: Globe },
   { id: 'mixer', label: 'Mixer', icon: SlidersHorizontal },
   { id: 'shortcuts', label: 'Shortcuts', icon: Keyboard },
   { id: 'settings', label: 'Settings', icon: Settings },

@@ -7,11 +7,15 @@ const KEY = 'breadboard.prototype.v1';
 export function migrate(raw: unknown): AppData {
   const def = defaultData();
   if (!raw || typeof raw !== 'object' || (raw as AppData).version !== 1) return def;
-  const p = raw as Partial<AppData>;
+  const p = raw as Omit<Partial<AppData>, 'channels'> & { channels?: Record<string, AppData['channels']['mic']> };
+  // v0.1 had a "browser" channel and a Web Player page; both became "app".
+  const { browser: oldBrowser, ...restChannels } = p.channels ?? ({} as Record<string, AppData['channels']['mic']>);
+  const page = (p.page as string) === 'web' ? 'soundboard' : p.page ?? def.page;
   return {
     ...def,
     ...p,
-    channels: { ...def.channels, ...p.channels },
+    page,
+    channels: { ...def.channels, ...(oldBrowser ? { app: oldBrowser } : {}), ...restChannels } as AppData['channels'],
     processing: { ...def.processing, ...p.processing },
     devices: { ...def.devices, ...p.devices },
     appearance: { ...def.appearance, ...p.appearance },

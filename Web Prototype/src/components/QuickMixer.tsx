@@ -1,11 +1,13 @@
-import { ChartNoAxesColumn, LayoutGrid, Mic, MicOff, Volume2, VolumeX } from 'lucide-react';
+import { AppWindow, ChartNoAxesColumn, LayoutGrid, Mic, MicOff, Volume2, VolumeX } from 'lucide-react';
 import type { ChannelId } from '../types';
 import { useApp } from '../state/AppStore';
 import { patchChannel } from '../lib/util';
+import { AppSourcePicker } from './AppSourcePicker';
 import { Button, IconButton, LiveMeter, SectionHeader, Slider } from './ui';
 
 const ROWS: { id: ChannelId; label: string; icon: typeof Mic }[] = [
   { id: 'mic', label: 'Microphone', icon: Mic },
+  { id: 'app', label: 'App Audio', icon: AppWindow },
   { id: 'soundboard', label: 'Soundboard', icon: LayoutGrid },
 ];
 
@@ -22,19 +24,22 @@ export function QuickMixer({ onOpenMixer }: { onOpenMixer: () => void }) {
           const ch = data.channels[id];
           const MuteIcon = id === 'mic' ? (ch.muted ? MicOff : Mic) : ch.muted ? VolumeX : Volume2;
           return (
-            <div key={id} className="grid grid-cols-[1.75rem_minmax(0,7rem)_1fr_3.25rem_auto] items-center gap-3 py-1.5 sm:gap-5">
-              <Icon size={22} className={ch.muted ? 'text-mute' : 'text-ink/80'} />
-              <span className="truncate text-[15px] text-ink/85">{label}</span>
-              <div className="flex flex-col gap-1">
-                <Slider label={`${label} volume`} value={ch.gain} onChange={(v) => setData((d) => patchChannel(d, id, { gain: v }))} />
-                <LiveMeter channel={id} className="mx-[2px] !h-[3px] opacity-80" />
+            <div key={id} className="flex flex-col gap-1 py-1.5">
+              <div className="grid grid-cols-[1.75rem_minmax(0,7rem)_1fr_3.25rem_auto] items-center gap-3 sm:gap-5">
+                <Icon size={22} className={ch.muted ? 'text-mute' : 'text-ink/80'} />
+                <span className="truncate text-[15px] text-ink/85">{label}</span>
+                <div className="flex flex-col gap-1">
+                  <Slider label={`${label} volume`} value={ch.gain} onChange={(v) => setData((d) => patchChannel(d, id, { gain: v }))} />
+                  <LiveMeter channel={id} className="mx-[2px] !h-[3px] opacity-80" />
+                </div>
+                <span className="text-right tabular-nums text-ink/85">{ch.gain}%</span>
+                <IconButton
+                  icon={MuteIcon} active={ch.muted} danger
+                  label={ch.muted ? `Unmute ${label}` : `Mute ${label}`}
+                  onClick={() => setData((d) => patchChannel(d, id, { muted: !ch.muted }))}
+                />
               </div>
-              <span className="text-right tabular-nums text-ink/85">{ch.gain}%</span>
-              <IconButton
-                icon={MuteIcon} active={ch.muted} danger
-                label={ch.muted ? `Unmute ${label}` : `Mute ${label}`}
-                onClick={() => setData((d) => patchChannel(d, id, { muted: !ch.muted }))}
-              />
+              {id === 'app' && <AppSourcePicker className="ml-[calc(1.75rem+0.75rem)] max-w-md sm:ml-[calc(1.75rem+1.25rem)]" />}
             </div>
           );
         })}

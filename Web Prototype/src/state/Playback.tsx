@@ -11,15 +11,11 @@ export interface Instance {
   loop: boolean;
 }
 
-export interface BrowserTrack { title: string; site: string }
-
 interface PlaybackApi {
   instances: Instance[];
   trigger: (soundId: string, phase?: 'down' | 'up') => void;
   stop: (soundId: string) => void;
   stopAll: () => void;
-  browserTrack: BrowserTrack | null;
-  setBrowserTrack: (t: BrowserTrack | null) => void;
   pttDown: boolean;
   setPtt: (v: boolean) => void;
 }
@@ -35,7 +31,6 @@ export function PlaybackProvider({ children }: { children: ReactNode }) {
   const instRef = useRef<Instance[]>([]);
   const timers = useRef(new Map<number, number>());
   const nextId = useRef(1);
-  const [browserTrack, setBrowserTrack] = useState<BrowserTrack | null>(null);
   const [pttDown, setPtt] = useState(false);
 
   const commit = useCallback((next: Instance[]) => {
@@ -95,7 +90,7 @@ export function PlaybackProvider({ children }: { children: ReactNode }) {
   useEffect(() => () => timers.current.forEach((t) => window.clearTimeout(t)), []);
 
   return (
-    <Ctx.Provider value={{ instances, trigger, stop, stopAll, browserTrack, setBrowserTrack, pttDown, setPtt }}>
+    <Ctx.Provider value={{ instances, trigger, stop, stopAll, pttDown, setPtt }}>
       {children}
     </Ctx.Provider>
   );

@@ -1,4 +1,5 @@
-import { AudioLines, Globe, Headphones, LayoutGrid, Mic, MicOff, TriangleAlert, Volume2, VolumeX, type LucideIcon } from 'lucide-react';
+import { AppSourcePicker } from '../components/AppSourcePicker';
+import { AppWindow, AudioLines, Headphones, LayoutGrid, Mic, MicOff, TriangleAlert, Volume2, VolumeX, type LucideIcon } from 'lucide-react';
 import type { ChannelId, Processing } from '../types';
 import { useApp } from '../state/AppStore';
 import { usePlayback } from '../state/Playback';
@@ -11,7 +12,7 @@ import { Fader, Field, LiveMeter, PageTitle, SimBadge, Slider, Toggle } from '..
 
 const META: Record<ChannelId, { label: string; icon: LucideIcon; desc: string }> = {
   mic: { label: 'Microphone', icon: Mic, desc: 'Physical input' },
-  browser: { label: 'Browser', icon: Globe, desc: 'Web Player process' },
+  app: { label: 'App Audio', icon: AppWindow, desc: 'A window you choose' },
   soundboard: { label: 'Soundboard', icon: LayoutGrid, desc: 'Local sounds' },
   master: { label: 'Master', icon: AudioLines, desc: 'To virtual mic' },
 };
@@ -25,7 +26,7 @@ function Strip({ id }: { id: ChannelId }) {
 
   let status: string;
   if (id === 'mic') status = data.processing.pushToTalk.enabled ? (pb.pttDown ? 'Talking (PTT)' : 'PTT idle') : 'Live';
-  else if (id === 'browser') status = pb.browserTrack ? 'Capturing' : 'Idle';
+  else if (id === 'app') status = data.devices.appSource ? `Capturing ${data.devices.appSource.processName}` : 'No app selected';
   else if (id === 'soundboard') status = `${pb.instances.length} voice${pb.instances.length === 1 ? '' : 's'}`;
   else status = data.devices.virtualMicEnabled ? 'Output on' : 'Virtual mic off';
 
@@ -40,7 +41,8 @@ function Strip({ id }: { id: ChannelId }) {
           <div className="truncate text-xs text-mute">{m.desc}</div>
         </div>
       </div>
-      <span className="self-start rounded-full bg-side px-2.5 py-1 text-xs text-ink/75">{status}</span>
+      <span className="max-w-full self-start truncate rounded-full bg-side px-2.5 py-1 text-xs text-ink/75">{status}</span>
+      {id === 'app' && <AppSourcePicker className="w-full" />}
       <div className="flex items-stretch gap-4">
         <Fader label={`${m.label} gain`} value={ch.gain} onChange={(v) => set({ gain: v })} height={190} />
         <LiveMeter channel={id} vertical className="!w-2" />
@@ -107,7 +109,7 @@ export function MixerPage() {
       <PageTitle title="Mixer" desc="Four channels mixed into one virtual microphone output." right={<SimBadge>Simulated levels</SimBadge>} />
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {(['mic', 'browser', 'soundboard', 'master'] as const).map((id) => <Strip key={id} id={id} />)}
+        {(['mic', 'app', 'soundboard', 'master'] as const).map((id) => <Strip key={id} id={id} />)}
       </div>
 
       <section>
@@ -116,7 +118,7 @@ export function MixerPage() {
           <ProcCard k="noiseGate" title="Noise gate" desc="Silences the mic below a threshold" param="threshold" min={0} max={50} unit="%" />
           <ProcCard k="compressor" title="Compressor" desc="Evens out loud peaks" param="amount" min={0} max={100} unit="%" />
           <ProcCard k="limiter" title="Limiter" desc="Hard ceiling on the master output" param="ceiling" min={50} max={100} unit="%" />
-          <ProcCard k="ducking" title="Voice ducking" desc="Lowers browser audio while you talk" param="amount" min={0} max={100} unit="%" />
+          <ProcCard k="ducking" title="Voice ducking" desc="Lowers app audio while you talk" param="amount" min={0} max={100} unit="%" />
         </div>
         <div className="card mt-4 flex flex-wrap items-center gap-4 p-4">
           <div className="min-w-0 flex-1">

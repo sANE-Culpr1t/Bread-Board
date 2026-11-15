@@ -7,7 +7,7 @@ import { computeLevels, newSimState, type Levels } from '../lib/simulation';
 
 interface Tick { now: number; levels: Levels }
 
-const ZERO: Levels = { mic: 0, browser: 0, soundboard: 0, master: 0 };
+const ZERO: Levels = { mic: 0, app: 0, soundboard: 0, master: 0 };
 const Ctx = createContext<Tick>({ now: 0, levels: ZERO });
 
 export function TickProvider({ children }: { children: ReactNode }) {
@@ -26,7 +26,7 @@ export function TickProvider({ children }: { children: ReactNode }) {
       if (t - last < 33) return;
       last = t;
       const { data: d, pb: p } = src.current;
-      const levels = computeLevels(t, d, { instances: p.instances, browserPlaying: !!p.browserTrack, pttDown: p.pttDown }, sim.current);
+      const levels = computeLevels(t, d, { instances: p.instances, pttDown: p.pttDown }, sim.current);
       setTick({ now: t, levels });
     };
     raf = requestAnimationFrame(loop);

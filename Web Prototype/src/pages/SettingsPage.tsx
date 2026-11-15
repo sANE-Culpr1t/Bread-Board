@@ -22,6 +22,8 @@ export function SettingsPage() {
   const toast = useToast();
   const [profileName, setProfileName] = useState('');
   const [newCat, setNewCat] = useState('');
+  const [siteName, setSiteName] = useState('');
+  const [siteUrl, setSiteUrl] = useState('');
   const [confirmReset, setConfirmReset] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const st = data.settings;
@@ -148,6 +150,31 @@ export function SettingsPage() {
           }}>
             <input className="bb-field" placeholder="New category" value={newCat} maxLength={24} onChange={(e) => setNewCat(e.target.value)} aria-label="New category name" />
             <Button type="submit" icon={FolderPlus} disabled={!newCat.trim()}>Add</Button>
+          </form>
+        </div>
+      </Section>
+
+      <Section title="Sound sites">
+        <div className="divide-y divide-line">
+          {data.webShortcuts.map((s) => (
+            <div key={s.id} className="flex items-center gap-3 py-2.5">
+              <div className="min-w-0 flex-1">
+                <div>{s.name}</div>
+                <div className="truncate text-xs text-mute">{s.url}</div>
+              </div>
+              <IconButton size="sm" icon={Trash2} label={`Remove ${s.name}`} onClick={() => setData((d) => ({ ...d, webShortcuts: d.webShortcuts.filter((x) => x.id !== s.id) }))} />
+            </div>
+          ))}
+          <form className="flex flex-wrap gap-2 py-3" onSubmit={(e) => {
+            e.preventDefault();
+            let url: string;
+            try { url = new URL(/^https?:\/\//i.test(siteUrl) ? siteUrl : `https://${siteUrl}`).toString(); } catch { return toast('Enter a valid web address.', 'error'); }
+            setData((d) => ({ ...d, webShortcuts: [...d.webShortcuts, { id: uid(), name: siteName.trim(), url }] }));
+            setSiteName(''); setSiteUrl('');
+          }}>
+            <input className="bb-field !w-40" placeholder="Name" value={siteName} maxLength={24} onChange={(e) => setSiteName(e.target.value)} aria-label="Site name" />
+            <input className="bb-field min-w-0 flex-1" placeholder="example.com" value={siteUrl} onChange={(e) => setSiteUrl(e.target.value)} aria-label="Site address" />
+            <Button type="submit" icon={FolderPlus} disabled={!siteName.trim() || !siteUrl.trim()}>Add site</Button>
           </form>
         </div>
       </Section>

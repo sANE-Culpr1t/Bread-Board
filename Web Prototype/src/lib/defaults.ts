@@ -42,7 +42,7 @@ export function defaultData(): AppData {
     recent: [],
     channels: {
       mic: { gain: 80, muted: false, toVirtualMic: true, toMonitor: false },
-      browser: { gain: 65, muted: false, toVirtualMic: true, toMonitor: true },
+      app: { gain: 65, muted: false, toVirtualMic: true, toMonitor: false },
       soundboard: { gain: 70, muted: false, toVirtualMic: true, toMonitor: true },
       master: { gain: 90, muted: false, toVirtualMic: true, toMonitor: false },
     },
@@ -58,6 +58,7 @@ export function defaultData(): AppData {
       output: OUTPUT_DEVICES[0],
       monitor: MONITOR_DEVICES[0],
       virtualMicEnabled: true,
+      appSource: null,
     },
     appearance: { ...DEFAULT_APPEARANCE },
     mini: {
@@ -66,9 +67,7 @@ export function defaultData(): AppData {
     },
     webShortcuts: [
       { id: 'myinstants', name: 'Myinstants', url: 'https://www.myinstants.com/' },
-      { id: 'youtube', name: 'YouTube', url: 'https://www.youtube.com/' },
     ],
-    webHome: 'https://www.myinstants.com/',
     globalHotkeys: { stopAll: 'Ctrl+Shift+S', muteMic: 'Ctrl+Shift+M', toggleMini: 'Ctrl+Shift+G' },
     settings: { allowStacking: true, maxVoices: 8, confirmDelete: true },
     profiles: [],
@@ -77,11 +76,11 @@ export function defaultData(): AppData {
 
   const general = makeSnapshot(base);
   const gaming = makeSnapshot(base);
-  gaming.channels.browser.gain = 45;
+  gaming.channels.app.gain = 45;
   gaming.processing.pushToTalk.enabled = false;
   gaming.processing.noiseGate.threshold = 18;
   const streaming = makeSnapshot(base);
-  streaming.channels.browser.gain = 55;
+  streaming.channels.app.gain = 55;
   streaming.processing.compressor.enabled = true;
   streaming.processing.ducking.enabled = true;
 

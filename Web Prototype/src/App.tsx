@@ -13,7 +13,6 @@ import { StatusBar } from './components/StatusBar';
 import { MiniPlayer } from './components/MiniPlayer';
 import { SoundEditor, type EditorState } from './components/SoundEditor';
 import { SoundboardPage } from './pages/SoundboardPage';
-import { WebPlayerPage } from './pages/WebPlayerPage';
 import { MixerPage } from './pages/MixerPage';
 import { ShortcutsPage } from './pages/ShortcutsPage';
 import { SettingsPage } from './pages/SettingsPage';
@@ -50,7 +49,6 @@ function Shell() {
 
   const page = (() => {
     switch (data.page) {
-      case 'web': return <WebPlayerPage />;
       case 'mixer': return <MixerPage />;
       case 'shortcuts': return <ShortcutsPage />;
       case 'settings': return <SettingsPage />;

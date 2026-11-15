@@ -3,18 +3,18 @@
 import type { AppData } from '../types';
 import type { Instance } from '../state/Playback';
 
-export interface Levels { mic: number; browser: number; soundboard: number; master: number }
+export interface Levels { mic: number; app: number; soundboard: number; master: number }
 
 export interface SimState {
   talking: boolean;
   switchAt: number;
   mic: number;
-  browser: number;
+  app: number;
   soundboard: number;
   master: number;
 }
 
-export const newSimState = (): SimState => ({ talking: false, switchAt: 0, mic: 0, browser: 0, soundboard: 0, master: 0 });
+export const newSimState = (): SimState => ({ talking: false, switchAt: 0, mic: 0, app: 0, soundboard: 0, master: 0 });
 
 const smooth = (prev: number, target: number) =>
   target > prev ? prev + (target - prev) * 0.55 : prev + (target - prev) * 0.16;
@@ -25,7 +25,7 @@ const compress = (x: number, amount: number) => (x <= 0.45 ? x : 0.45 + (x - 0.4
 export function computeLevels(
   now: number,
   d: AppData,
-  pb: { instances: Instance[]; browserPlaying: boolean; pttDown: boolean },
+  pb: { instances: Instance[]; pttDown: boolean },
   s: SimState,
 ): Levels {
   // Fake "voice": alternates between talking and silence.
@@ -56,19 +56,20 @@ export function computeLevels(
   }
   sb = ch.soundboard.muted ? 0 : Math.min(1.2, sb) * (ch.soundboard.gain / 100);
 
-  let br = pb.browserPlaying ? (0.4 + 0.25 * Math.random()) * (0.8 + 0.2 * Math.sin(now / 300)) : 0;
-  if (pr.ducking.enabled && mic > 0.15) br *= 1 - pr.ducking.amount / 100;
-  br = ch.browser.muted ? 0 : br * (ch.browser.gain / 100);
+  // A selected app is treated as "playing something".
+  let app = d.devices.appSource ? (0.4 + 0.25 * Math.random()) * (0.8 + 0.2 * Math.sin(now / 300)) : 0;
+  if (pr.ducking.enabled && mic > 0.15) app *= 1 - pr.ducking.amount / 100;
+  app = ch.app.muted ? 0 : app * (ch.app.gain / 100);
 
-  let m = (ch.mic.toVirtualMic ? mic : 0) + (ch.browser.toVirtualMic ? br : 0) + (ch.soundboard.toVirtualMic ? sb : 0);
+  let m = (ch.mic.toVirtualMic ? mic : 0) + (ch.app.toVirtualMic ? app : 0) + (ch.soundboard.toVirtualMic ? sb : 0);
   m *= 0.85;
   if (pr.compressor.enabled) m = compress(m, pr.compressor.amount);
   m = ch.master.muted ? 0 : m * (ch.master.gain / 100);
   if (pr.limiter.enabled) m = Math.min(m, pr.limiter.ceiling / 100);
 
   s.mic = smooth(s.mic, clamp01(mic));
-  s.browser = smooth(s.browser, clamp01(br));
+  s.app = smooth(s.app, clamp01(app));
   s.soundboard = smooth(s.soundboard, clamp01(sb));
   s.master = smooth(s.master, clamp01(m));
-  return { mic: s.mic, browser: s.browser, soundboard: s.soundboard, master: s.master };
+  return { mic: s.mic, app: s.app, soundboard: s.soundboard, master: s.master };
 }

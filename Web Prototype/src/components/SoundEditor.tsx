@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { FileAudio, Plus, Trash2 } from 'lucide-react';
+import { CircleCheck, ExternalLink, FileAudio, Link2, Plus, Trash2 } from 'lucide-react';
 import type { PlayMode, Sound } from '../types';
 import { SOUND_ICONS, TINTS, type IconKey, type TintKey } from '../lib/icons';
 import { validateHotkey } from '../lib/hotkeys';
@@ -19,6 +19,32 @@ const MODES: { value: PlayMode; label: string; hint: string }[] = [
 ];
 
 const ACCEPT = ['wav', 'mp3', 'ogg'];
+
+const titleCase = (s: string) => s.replace(/\b\w/g, (c) => c.toUpperCase());
+
+/** Works out a sound name from a supported link, or explains why it can't. */
+export function parseSoundUrl(raw: string): { name: string; fileName: string; url: string } | { error: string } {
+  let u: URL;
+  try {
+    u = new URL(raw.trim().match(/^https?:\/\//i) ? raw.trim() : `https://${raw.trim()}`);
+  } catch {
+    return { error: 'That doesn’t look like a web address.' };
+  }
+  const path = decodeURIComponent(u.pathname);
+  const file = path.split('/').filter(Boolean).pop() ?? '';
+  const ext = file.split('.').pop()?.toLowerCase() ?? '';
+  if (ACCEPT.includes(ext)) {
+    const name = titleCase(file.replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' ').trim());
+    return { name: name.slice(0, 40), fileName: file, url: u.toString() };
+  }
+  const m = /\/instant\/([^/]+)\/?$/i.exec(path);
+  if (/myinstants\.com$/i.test(u.hostname) && m) {
+    const slug = m[1].replace(/-\d+$/, '');
+    const name = titleCase(slug.replace(/[-_]+/g, ' ').trim());
+    return { name: name.slice(0, 40), fileName: `${slug}.mp3`, url: u.toString() };
+  }
+  return { error: 'Paste a Myinstants sound page link or a direct .mp3 / .wav / .ogg link.' };
+}
 
 const blank = (category: string): Sound => ({
   id: '', name: '', icon: 'volume', tint: 'beige', category, hotkey: null,
@@ -53,6 +79,8 @@ export function SoundEditor({ state, onClose }: { state: EditorState; onClose: (
   const [error, setError] = useState<string | null>(null);
   const [confirmDel, setConfirmDel] = useState(false);
   const [newCat, setNewCat] = useState<string | null>(null);
+  const [source, setSource] = useState<'file' | 'web'>('file');
+  const [link, setLink] = useState('');
 
   useEffect(() => {
     if (!state) return;
@@ -60,6 +88,8 @@ export function SoundEditor({ state, onClose }: { state: EditorState; onClose: (
     setError(null);
     setConfirmDel(false);
     setNewCat(null);
+    setSource(editing?.sourceUrl ? 'web' : 'file');
+    setLink(editing?.sourceUrl ?? '');
     // Re-initialise only when the dialog opens for a different target.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state]);
@@ -76,10 +106,18 @@ export function SoundEditor({ state, onClose }: { state: EditorState; onClose: (
     const dur = await readDuration(f);
     setForm((p) => ({
       ...p,
+      sourceUrl: null,
       fileName: f.name,
       name: p.name.trim() ? p.name : f.name.replace(/\.[^.]+$/, '').slice(0, 40),
       durationMs: dur ?? p.durationMs,
     }));
+  };
+
+  const fetchLink = () => {
+    const r = parseSoundUrl(link);
+    if ('error' in r) return setError(r.error);
+    setError(null);
+    setForm((p) => ({ ...p, sourceUrl: r.url, fileName: r.fileName, name: p.name.trim() ? p.name : r.name }));
   };
 
   const save = () => {
@@ -108,6 +146,40 @@ export function SoundEditor({ state, onClose }: { state: EditorState; onClose: (
   return (
     <Modal open={!!state} onClose={onClose} title={editing ? 'Edit sound' : 'Add sound'} width={600}>
       <div className="flex flex-col gap-5">
+        <Segmented
+          label="Sound source" value={source} onChange={setSource}
+          options={[{ value: 'file', label: 'From file' }, { value: 'web', label: 'From website' }]}
+        />
+
+        {source === 'web' ? (
+          <div className="flex flex-col gap-3 rounded-2xl border border-dashed border-line-strong bg-side px-4 py-4">
+            <div className="flex flex-wrap items-center gap-2 text-sm">
+              <span className="text-mute">Find a sound on</span>
+              {data.webShortcuts.map((s) => (
+                <a key={s.id} href={s.url} target="_blank" rel="noopener noreferrer" className="inline-flex h-8 items-center gap-1 rounded-full bg-raised px-3 hover:bg-hover hover:text-accent">
+                  {s.name} <ExternalLink size={12} />
+                </a>
+              ))}
+              <span className="text-mute">then copy its link here.</span>
+            </div>
+            <form className="flex gap-2" onSubmit={(e) => { e.preventDefault(); fetchLink(); }}>
+              <input
+                className="bb-field" value={link} onChange={(e) => setLink(e.target.value)}
+                placeholder="https://www.myinstants.com/en/instant/vine-boom-sound-70972/" aria-label="Sound page or audio file link"
+              />
+              <Button type="submit" variant="primary" icon={Link2} disabled={!link.trim()}>Get sound</Button>
+            </form>
+            {form.sourceUrl ? (
+              <div className="flex items-center gap-2 text-sm">
+                <CircleCheck size={15} className="shrink-0 text-ok" />
+                <span className="min-w-0 truncate">{form.fileName}</span>
+                <SimBadge className="ml-auto">Download simulated</SimBadge>
+              </div>
+            ) : (
+              <div className="text-xs text-mute">Supports Myinstants sound pages and direct .mp3 / .wav / .ogg links. The Windows app downloads the file into your library.</div>
+            )}
+          </div>
+        ) : (
         <label
           className="flex cursor-pointer items-center gap-4 rounded-2xl border border-dashed border-line-strong bg-side px-4 py-4 transition-colors hover:border-accent/50"
           onDragOver={(e) => e.preventDefault()}
@@ -123,6 +195,7 @@ export function SoundEditor({ state, onClose }: { state: EditorState; onClose: (
           <SimBadge>No audio stored</SimBadge>
           <input type="file" accept=".wav,.mp3,.ogg,audio/wav,audio/mpeg,audio/ogg" className="sr-only" onChange={(e) => onFile(e.target.files?.[0])} />
         </label>
+        )}
 
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Name">

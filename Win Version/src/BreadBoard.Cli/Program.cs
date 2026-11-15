@@ -1,4 +1,4 @@
-﻿// Bread Board backend test host. Exercises the real audio engine without a UI.
+// Bread Board backend test host. Exercises the real audio engine without a UI.
 //   bb devices                 list audio inputs/outputs
 //   bb apps                    list running apps that can be captured
 //   bb download <link>         download a sound (Myinstants page or .mp3/.wav/.ogg) into the library
@@ -32,6 +32,7 @@ try
         "run" => await Run(),
         "selftest" => await SelfTest(),
         "probe" => await Probe(),
+        "tone" => await PlayTone(),
         _ => Usage(),
     };
 }
@@ -283,6 +284,21 @@ async Task<int> SelfTest()
 
     Console.WriteLine(failures == 0 ? "\nAll checks passed." : $"\n{failures} check(s) failed. See {AppPaths.Logs}");
     return failures == 0 ? 0 : 1;
+}
+
+// Test helper: an "app" that plays a steady tone, into the virtual cable by default so the speakers stay quiet.
+async Task<int> PlayTone()
+{
+    var seconds = double.TryParse(Arg("--seconds"), System.Globalization.CultureInfo.InvariantCulture, out var s) ? s : 10;
+    using var devices = new DeviceService();
+    var target = args.Contains("--speakers") ? null : devices.FindVirtualCableOutput();
+    using var device = devices.Resolve(DeviceKind.Output, target?.Id);
+    if (device is null) { Console.Error.WriteLine("No output device"); return 1; }
+    var tone = new NAudio.Wave.SampleProviders.SignalGenerator(AudioFormat.SampleRate, AudioFormat.Channels) { Frequency = 440, Gain = 0.3 };
+    using var output = BreadBoard.Audio.Output.OutputDevice.Start(device, tone);
+    Console.WriteLine($"Playing a 440 Hz tone on {device.FriendlyName} for {seconds} s (pid {Environment.ProcessId})");
+    await Task.Delay(TimeSpan.FromSeconds(seconds));
+    return 0;
 }
 
 int Check(string what, double rms, double min)

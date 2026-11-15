@@ -28,6 +28,8 @@
   <ItemGroup>
     <!-- Build the app first; lifecycle tests launch its exe. -->
     <ProjectReference Include="..\..\src\BreadBoard.App\BreadBoard.App.csproj" ReferenceOutputAssembly="false" />
+    <!-- App-audio tests launch `bb tone` as an app to capture. -->
+    <ProjectReference Include="..\..\src\BreadBoard.Cli\BreadBoard.Cli.csproj" ReferenceOutputAssembly="false" />
   </ItemGroup>
 </Project>
 

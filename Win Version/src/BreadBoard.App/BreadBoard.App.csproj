@@ -7,7 +7,7 @@
     <AssemblyName>BreadBoard</AssemblyName>
     <RootNamespace>BreadBoard.App</RootNamespace>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <Version>0.3.0</Version>
+    <Version>0.4.0</Version>
     <!-- Startup: precompile on publish, keep the dynamic PGO/tiering defaults. -->
     <PublishReadyToRun>true</PublishReadyToRun>
     <RuntimeIdentifier Condition="'$(Configuration)' == 'Release'">win-x64</RuntimeIdentifier>

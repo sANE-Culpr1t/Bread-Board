@@ -5,7 +5,9 @@ using BreadBoard.Audio.Output;
 using BreadBoard.Audio.Soundboard;
 using BreadBoard.Audio.Sources;
 using BreadBoard.Core.Logging;
+using System.Diagnostics;
 using BreadBoard.Core.Models;
+using BreadBoard.Core.Sounds;
 
 namespace BreadBoard.Audio;
 
@@ -25,6 +27,9 @@ public sealed class AudioHost : IAsyncDisposable
     private readonly SemaphoreSlim _lock = new(1, 1);
     private readonly CancellationTokenSource _life = new();
     private CaptureSource? _mic, _app;
+    private int _appPid;
+    private Process? _appProcess;
+    private Timer? _appWait;
     private OutputDevice? _output, _monitor;
     private AppConfig _config = new();
     private SourceStatus _micStatus = new(SourceState.Off, null), _appStatus = new(SourceState.Off, null);
@@ -169,28 +174,36 @@ public sealed class AudioHost : IAsyncDisposable
             }
         }
 
-        // App audio (process loopback).
+        // App audio (process loopback). Remembered by executable name; follows the app across restarts.
         if (dev.AppSource is not { ProcessName.Length: > 0 } sel)
         {
             StopApp(new(SourceState.Off, null));
         }
+        else if (AppSourceRules.Blocked(sel.ProcessName) is { } why)
+        {
+            StopApp(new(SourceState.Failed, sel.ProcessName, why));
+        }
         else
         {
-            var app = AudioAppEnumerator.Find(AudioAppEnumerator.List(Devices), sel.ProcessName);
-            var label = app is null ? sel.ProcessName : $"{app.ProcessName} ({app.WindowTitle})";
+            var app = AudioAppEnumerator.Find(AudioAppEnumerator.List(Devices), sel.ProcessName)
+                      ?? AudioAppEnumerator.FindRunning(sel.ProcessName);
+            var label = app?.DisplayName ?? sel.DisplayName ?? sel.ProcessName;
             if (app is null)
             {
-                StopApp(new(SourceState.Unavailable, sel.ProcessName, $"{sel.ProcessName} isn't running"));
+                StopApp(new(SourceState.Unavailable, label, $"Waiting for {label} to start"));
+                WatchForAppStart(sel.ProcessName);
             }
-            else if (_app is null || _appStatus.Name != label || _appStatus.State != SourceState.Running)
+            else if (_app is null || _appPid != app.ProcessId || _appStatus.State != SourceState.Running)
             {
                 StopApp(new(SourceState.Starting, label));
                 try
                 {
                     var src = await CaptureSource.StartProcessAsync(app.ProcessId, label).ConfigureAwait(false);
-                    src.Stopped += ex => { SetApp(new(SourceState.Unavailable, label, ex?.Message ?? "App stopped")); ScheduleRecovery("app capture stopped", 2000); };
+                    src.Stopped += ex => { SetApp(new(SourceState.Unavailable, label, ex?.Message ?? "Capture stopped")); ScheduleRecovery("app capture stopped", 2000); };
                     _app = src;
+                    _appPid = app.ProcessId;
                     Mixer.AppSource = src;
+                    WatchForAppExit(app.ProcessId, label);
                     SetApp(new(SourceState.Running, label));
                 }
                 catch (Exception ex)
@@ -242,8 +255,50 @@ public sealed class AudioHost : IAsyncDisposable
     {
         Mixer.AppSource = null;
         _app?.Dispose(); _app = null;
+        _appPid = 0;
+        _appProcess?.Dispose(); _appProcess = null;
+        _appWait?.Dispose(); _appWait = null;
         SetApp(status);
     }
+
+    /// <summary>Process exit is signalled by the OS (no polling); the app's capture is then torn down.</summary>
+    private void WatchForAppExit(int pid, string label)
+    {
+        try
+        {
+            var proc = Process.GetProcessById(pid);
+            proc.EnableRaisingEvents = true;
+            proc.Exited += (_, _) =>
+            {
+                if (!ReferenceEquals(_appProcess, proc)) return;
+                Log.Info($"{label} closed");
+                SetApp(new(SourceState.Unavailable, label, $"{label} closed"));
+                ScheduleRecovery("app closed", 300);
+            };
+            _appProcess = proc;
+        }
+        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or System.ComponentModel.Win32Exception)
+        {
+            Log.Warn($"Can't watch {label} for exit", ex);
+        }
+    }
+
+    /// <summary>
+    /// While the chosen app isn't running, check every few seconds whether it has started (a cheap
+    /// process-name lookup; nothing runs when no app is chosen or it is already being captured).
+    /// </summary>
+    private void WatchForAppStart(string processName)
+    {
+        _appWait = new Timer(_ =>
+        {
+            if (!AudioAppEnumerator.IsRunning(processName)) return;
+            Log.Info($"{processName} started");
+            ScheduleRecovery("app started", 500);
+        }, null, AppWaitMs, AppWaitMs);
+    }
+
+    /// <summary>How often a missing app is looked for, in milliseconds.</summary>
+    public static int AppWaitMs { get; set; } = 3000;
 
     private void StopMonitor(SourceStatus status)
     {

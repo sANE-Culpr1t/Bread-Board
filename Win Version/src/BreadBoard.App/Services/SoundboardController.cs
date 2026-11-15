@@ -7,6 +7,7 @@ using BreadBoard.App.ViewModels;
 using BreadBoard.Audio;
 using BreadBoard.Audio.Devices;
 using BreadBoard.Audio.Import;
+using BreadBoard.Audio.Sources;
 using BreadBoard.Core;
 using BreadBoard.Core.Config;
 using BreadBoard.Core.Hotkeys;
@@ -53,16 +54,19 @@ public sealed class SoundboardController : IDisposable
     public ObservableCollection<SoundItem> Items { get; } = [];
     public IReadOnlyCollection<HotkeyState> Hotkeys => _hotkeys.Values;
     public bool EngineStarted => _engineStart is { IsCompletedSuccessfully: true };
-    public string EngineSummary { get; private set; } = "Starts when you add a sound";
+    public string EngineSummary { get; private set; } = "Starts when you add a sound or choose an app";
     public bool EngineOk { get; private set; }
     public float SoundboardLevel { get; private set; }
+    public float AppLevel { get; private set; }
+    /// <summary>State of the App Audio capture (Off when no app is chosen).</summary>
+    public SourceStatus AppStatus { get; private set; } = new(SourceState.Off, null);
 
     /// <summary>Short message for the user (text, isError).</summary>
     public event Action<string, bool>? Notice;
     public event Action? LibraryChanged;
     public event Action? HotkeysChanged;
     public event Action? EngineChanged;
-    /// <summary>Raised every frame while sounds play (progress / level) and once when playback stops.</summary>
+    /// <summary>Raised every frame while sounds play or app audio is captured (progress / levels), and once when that stops.</summary>
     public event Action? PlaybackTick;
     public Action? ToggleMiniRequested { get; set; }
 
@@ -74,7 +78,7 @@ public sealed class SoundboardController : IDisposable
     public async Task InitializeAsync()
     {
         await RegisterHotkeysAsync();
-        if (Items.Count > 0) await EnsureEngineAsync();
+        if (Items.Count > 0 || Config.Devices.AppSource is not null) await EnsureEngineAsync();
     }
 
     private Task EnsureEngineAsync() => _engineStart ??= StartEngineAsync();
@@ -99,14 +103,14 @@ public sealed class SoundboardController : IDisposable
     }
 
     /// <summary>
-    /// The engine gets a copy of the settings limited to what this iteration controls:
-    /// soundboard → virtual cable (+ this PC's speakers). Mic and app capture join in Iterations 3–4.
+    /// The engine gets a copy of the settings limited to what is wired so far: soundboard and the
+    /// chosen app → virtual cable (soundboard also to this PC's speakers). The mic joins in Iteration 4.
     /// </summary>
     private AppConfig AudioConfig()
     {
         var c = ConfigStore.Clone(_host.Config.Current);
         c.Devices.MicEnabled = false;
-        c.Devices.AppSource = null;
+        c.Channels.App.ToMonitor = false; // you already hear the app itself; a second, delayed copy would echo
         c.Devices.VirtualMicEnabled = true;
         c.Devices.MonitorEnabled = c.Playback.HearOnThisPc;
         c.Devices.MonitorDeviceId = null;
@@ -143,6 +147,8 @@ public sealed class SoundboardController : IDisposable
             EngineOk = false;
             EngineSummary = s.Output.Error ?? "Virtual cable not available";
         }
+        AppStatus = s.App;
+        UpdateTicking();
         EngineChanged?.Invoke();
 
         static string Name(string? name) => name is null ? "?" : DeviceService.IsVirtualCable(name) ? "virtual cable" : name;
@@ -212,19 +218,28 @@ public sealed class SoundboardController : IDisposable
         if (EngineStarted) _host.Audio.Soundboard.StopAll();
     }
 
-    public bool AnyPlaying => _byId.Values.Any(i => i.Playing);
+    public bool AnyPlaying => _byId.Values.Any(static i => i.Playing);
 
     private void OnPlayingChanged(IReadOnlyList<string> ids)
     {
         foreach (var item in _byId.Values) item.Playing = ids.Contains(item.Id);
-        if (ids.Count > 0) { if (!_tick.IsEnabled) _tick.Start(); }
-        else
+        if (ids.Count == 0)
         {
-            _tick.Stop();
             foreach (var item in _byId.Values) item.Progress = 0;
             SoundboardLevel = 0;
-            PlaybackTick?.Invoke();
         }
+        UpdateTicking();
+    }
+
+    /// <summary>The UI timer runs only while something is audible (a sound playing or an app captured).</summary>
+    private void UpdateTicking()
+    {
+        var needed = AnyPlaying || AppStatus.State == SourceState.Running;
+        if (needed) { if (!_tick.IsEnabled) _tick.Start(); return; }
+        if (!_tick.IsEnabled) return;
+        _tick.Stop();
+        SoundboardLevel = AppLevel = 0;
+        PlaybackTick?.Invoke();
     }
 
     private void OnTick()
@@ -233,7 +248,41 @@ public sealed class SoundboardController : IDisposable
         foreach (var item in _byId.Values)
             if (item.Playing) item.Progress = engine.GetProgress(item.Id) % 1.0;
         SoundboardLevel = _host.Audio.Mixer.Board.TakePeak();
+        AppLevel = _host.Audio.Mixer.App.TakePeak();
         PlaybackTick?.Invoke();
+    }
+
+    // ---- app audio ----------------------------------------------------------------------
+
+    /// <summary>Running apps that can be captured (worker thread; enumerating windows and sessions takes a moment).</summary>
+    public Task<IReadOnlyList<AudioApp>> ListAppsAsync()
+    {
+        var devices = _host.Audio.Devices;
+        return Task.Run(() => AudioAppEnumerator.List(devices));
+    }
+
+    /// <summary>Chooses the app whose audio joins the mix, or none. Remembered by executable name.</summary>
+    public async Task SelectAppAsync(AudioApp? app)
+    {
+        _host.Config.Update(c => c.Devices.AppSource = app is null ? null
+            : new AppSourceSelection { ProcessName = app.ProcessName, WindowTitle = app.WindowTitle, DisplayName = app.Label, ExePath = app.ExePath });
+        Log.Info(app is null ? "App audio: none" : $"App audio: {app.ProcessName} (pid {app.ProcessId})");
+        if (app is null && _engineStart is null) return;
+        await EnsureEngineAsync();
+        await _host.Audio.StartAsync(AudioConfig());
+        UpdateEngineSummary();
+    }
+
+    /// <summary>App channel: gain 0–200 %, mute and whether it goes to the virtual mic.</summary>
+    public void SetAppChannel(int? gain = null, bool? muted = null, bool? toVirtualMic = null)
+    {
+        _host.Config.Update(c =>
+        {
+            if (gain is { } g) c.Channels.App.Gain = Math.Clamp(g, 0, 200);
+            if (muted is { } m) c.Channels.App.Muted = m;
+            if (toVirtualMic is { } v) c.Channels.App.ToVirtualMic = v;
+        });
+        if (EngineStarted) _host.Audio.ApplyMixSettings(AudioConfig());
     }
 
     // ---- library ------------------------------------------------------------------------

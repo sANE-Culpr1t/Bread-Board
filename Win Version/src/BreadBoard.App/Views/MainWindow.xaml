@@ -152,7 +152,7 @@
                             <TextBlock Text="{x:Static t:Glyph.Waveform}" Style="{StaticResource Icon}" FontSize="22" Foreground="{StaticResource Accent2Brush}" Margin="0,0,12,0"/>
                             <StackPanel MaxWidth="230">
                                 <TextBlock x:Name="EngineTitle" Text="Audio engine idle" FontWeight="SemiBold"/>
-                                <TextBlock x:Name="EngineDetail" Text="Starts when you add a sound" FontSize="12" Foreground="{StaticResource MuteBrush}" TextTrimming="CharacterEllipsis"/>
+                                <TextBlock x:Name="EngineDetail" Text="Starts when you add a sound or choose an app" FontSize="12" Foreground="{StaticResource MuteBrush}" TextTrimming="CharacterEllipsis"/>
                             </StackPanel>
                         </StackPanel>
                         <UniformGrid Grid.Column="1" Rows="1" VerticalAlignment="Center">
@@ -160,7 +160,7 @@
                                 <Style TargetType="TextBlock"><Setter Property="FontSize" Value="12"/><Setter Property="Foreground" Value="{StaticResource MuteBrush}"/><Setter Property="Margin" Value="0,0,0,5"/></Style>
                             </UniformGrid.Resources>
                             <StackPanel Margin="0,0,16,0" ToolTip="Microphone level arrives with the mixer in Iteration 4."><TextBlock Text="Microphone"/><ProgressBar Style="{StaticResource Meter}" Value="0"/></StackPanel>
-                            <StackPanel Margin="0,0,16,0" ToolTip="App audio level arrives in Iterations 3–4."><TextBlock Text="App audio"/><ProgressBar Style="{StaticResource Meter}" Value="0"/></StackPanel>
+                            <StackPanel x:Name="AppMeterBox" Margin="0,0,16,0" ToolTip="Choose an app on the Mixer page"><TextBlock x:Name="AppMeterLabel" Text="App audio" TextTrimming="CharacterEllipsis"/><ProgressBar x:Name="AppMeter" Style="{StaticResource Meter}" Maximum="1" Value="0"/></StackPanel>
                             <StackPanel Margin="0,0,16,0" ToolTip="Live level of the soundboard"><TextBlock Text="Soundboard"/><ProgressBar x:Name="BoardMeter" Style="{StaticResource Meter}" Maximum="1" Value="0"/></StackPanel>
                             <StackPanel Margin="0,0,16,0" ToolTip="Master level arrives with the mixer in Iteration 4."><TextBlock Text="Master"/><ProgressBar Style="{StaticResource Meter}" Value="0"/></StackPanel>
                         </UniformGrid>

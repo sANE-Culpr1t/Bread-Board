@@ -67,6 +67,10 @@ public sealed class AppSourceSelection
 {
     public string ProcessName { get; set; } = "";
     public string? WindowTitle { get; set; }
+    /// <summary>Friendly name ("Brave Browser") shown while the app isn't running.</summary>
+    public string? DisplayName { get; set; }
+    /// <summary>Executable path when known (for the icon).</summary>
+    public string? ExePath { get; set; }
 }
 
 public sealed class DeviceSettings

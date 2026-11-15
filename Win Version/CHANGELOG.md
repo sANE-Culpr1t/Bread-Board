@@ -1,5 +1,53 @@
 # Changelog — Bread Board (Win Version)
 
+## Iteration 3 — App Audio (v0.4.0)
+
+Replaces the original "browser integration" iteration (decision: any app, no Web Player). Pick any running
+app — a browser, Spotify, a game — and only that app's sound joins your virtual mic.
+
+### Added
+- **App picker** (`Views/Dialogs/AppPickerDialog`): running apps with their icons and friendly names,
+  "Playing now" / "Has audio" badges (apps playing sound listed first), search, refresh, "No app",
+  keyboard navigation. Warns before capturing voice-chat apps (Discord, Teams, Zoom, …) because their
+  audio would send people's voices back to them. Bread Board itself and system audio (audiodg, Voicemeeter)
+  are never offered.
+- **Live App Audio strip** on the Mixer page: chosen app with icon and status (Capturing / Connecting /
+  Waiting for … to start / … closed / error), gain fader 0–200 %, live level meter, Mute, "To virtual mic".
+  Monitor stays off on purpose (you already hear the app; a delayed copy would echo) and says why.
+  Bottom bar: live "App · <name>" meter.
+- **Follows the app** (`AudioHost`): remembered by executable name, so it works after restarts. When the
+  app closes, the OS process-exit signal tears the capture down at once; while it isn't running, a cheap
+  name check every 3 s notices it starting again and reconnects automatically. Child processes (browser
+  audio services) are included. Apps with no window yet are still found.
+- `bb tone` CLI helper: a stand-in app that plays a tone into the virtual cable, used by the tests.
+
+### Changed
+- The audio engine starts when there are sounds **or** an app is chosen.
+- App capture is no longer restarted when the app's window title changes (it's tracked by process).
+
+### Tests (73 passing)
+- Rules: self/system audio blocked, voice-chat apps warned, normal apps allowed.
+- Real capture (`bb tone` as the app): waits while the app isn't running → captures it when it starts,
+  its sound reaches the App channel → app killed: noticed → app restarted: captured again automatically →
+  mute silences it → choosing no app stops capture.
+- Enumeration: a playing app is listed with its audio session, "playing" state and executable path;
+  found by name with or without ".exe"; Bread Board's own process is never listed.
+- Manual (UI Automation on the real app): Mixer → Choose app → picker lists the helper as "Playing now" →
+  "Use bb" → strip shows Capturing and the bottom meter moves; selection saved; closing the helper shows
+  "bb closed"; restarting it shows Capturing again.
+
+### Performance (Release, 3 runs, 10 s idle, app chosen, no sounds)
+| Metric | Capturing an app | Chosen app closed (waiting) |
+|---|---|---|
+| First frame | 741–861 ms | 728–761 ms |
+| Idle CPU | 0.11–0.23 % | 0.07–0.19 % |
+| Working set | ~124–125 MB | ~119–120 MB |
+
+### Known issues
+- Same as Iteration 2: without a virtual cable nothing is sent anywhere (device choice: Iteration 4).
+- Apps that play through a separate helper process that isn't their child (rare) need that helper chosen.
+- The microphone isn't in the mix yet — the virtual mic carries the soundboard and the app (Iteration 4).
+
 ## Iteration 2 — Soundboard and Global Hotkeys (v0.3.0)
 
 ### Added

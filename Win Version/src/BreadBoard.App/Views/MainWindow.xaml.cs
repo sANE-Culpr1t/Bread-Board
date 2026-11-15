@@ -64,7 +64,11 @@ public partial class MainWindow : Window
         var sb = _host.Soundboard;
         sb.Notice += ShowToast;
         sb.EngineChanged += UpdateEngineStatus;
-        sb.PlaybackTick += () => BoardMeter.Value = Math.Min(1, sb.SoundboardLevel);
+        sb.PlaybackTick += () =>
+        {
+            BoardMeter.Value = Math.Min(1, sb.SoundboardLevel);
+            AppMeter.Value = Math.Min(1, sb.AppLevel);
+        };
         sb.ToggleMiniRequested = () => { if (_mini is null) ShowMini(); else _mini.Close(); };
         Toast.MouseLeftButtonUp += (_, _) => HideToast();
         _toastTimer.Tick += (_, _) => HideToast();
@@ -101,6 +105,10 @@ public partial class MainWindow : Window
         VmDot.Fill = (System.Windows.Media.Brush)FindResource(sb.EngineOk ? "OkBrush" : "BadBrush");
         VmStatus.Text = sb.EngineOk ? "Sending sounds" : "Not connected";
         VmCard.ToolTip = sb.EngineSummary;
+        var app = sb.AppStatus;
+        AppMeterLabel.Text = app.State == Audio.SourceState.Running ? $"App · {app.Name}" : "App audio";
+        AppMeterBox.ToolTip = sb.Config.Devices.AppSource is null ? "Choose an app on the Mixer page"
+            : app.State == Audio.SourceState.Running ? $"Capturing {app.Name}" : app.Error ?? "App audio is off";
     }
 
     public MiniPlayerWindow? MiniPlayer => _mini;
@@ -155,7 +163,7 @@ public partial class MainWindow : Window
     private FrameworkElement CreatePage(PageId id) => id switch
     {
         PageId.Soundboard => new SoundboardPage(_host.Soundboard),
-        PageId.Mixer => new MixerPage(_host.Config),
+        PageId.Mixer => new MixerPage(_host.Config, _host.Soundboard),
         PageId.Shortcuts => new ShortcutsPage(_host.Soundboard),
         PageId.Settings => new SettingsPage(_host.Config, this, _host.Soundboard),
         _ => throw new ArgumentOutOfRangeException(nameof(id)),

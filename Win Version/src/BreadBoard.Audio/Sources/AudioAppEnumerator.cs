@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using BreadBoard.Core.Logging;
+using BreadBoard.Core.Sounds;
 using NAudio.CoreAudioApi;
 using NAudio.CoreAudioApi.Interfaces;
 
@@ -10,7 +11,13 @@ namespace BreadBoard.Audio.Sources;
 /// <param name="ProcessId">Root process to capture (child processes are included).</param>
 /// <param name="HasAudioSession">The app (or one of its child processes) has an audio session.</param>
 /// <param name="IsPlaying">One of its sessions is currently active.</param>
-public sealed record AudioApp(int ProcessId, string ProcessName, string WindowTitle, bool HasAudioSession, bool IsPlaying);
+/// <param name="ExePath">Full executable path when Windows lets us read it (for the icon), else null.</param>
+/// <param name="DisplayName">Product description ("Brave Browser") or the process name.</param>
+public sealed record AudioApp(int ProcessId, string ProcessName, string WindowTitle, bool HasAudioSession, bool IsPlaying,
+    string? ExePath = null, string? DisplayName = null)
+{
+    public string Label => DisplayName ?? ProcessName;
+}
 
 /// <summary>
 /// Lists apps with visible windows and/or audio sessions. Browsers play audio from a child
@@ -76,9 +83,10 @@ public static partial class AudioAppEnumerator
         foreach (var pid in titles.Keys.Union(audio.Keys))
         {
             var name = NameOf(pid);
-            if (name.Length == 0) continue;
+            if (name.Length == 0 || AppSourceRules.Blocked(name) is not null) continue;
             var has = audio.TryGetValue(pid, out var playing);
-            result.Add(new AudioApp(pid, name, titles.GetValueOrDefault(pid, name), has, playing));
+            var exe = ExePath(pid);
+            result.Add(new AudioApp(pid, name, titles.GetValueOrDefault(pid, name), has, playing, exe, Describe(exe)));
         }
         return [.. result
             .OrderByDescending(a => a.IsPlaying)
@@ -91,6 +99,62 @@ public static partial class AudioAppEnumerator
         apps.Where(a => string.Equals(a.ProcessName, processName, StringComparison.OrdinalIgnoreCase)
                         || string.Equals(a.ProcessName + ".exe", processName, StringComparison.OrdinalIgnoreCase))
             .OrderByDescending(a => a.IsPlaying).ThenByDescending(a => a.HasAudioSession).FirstOrDefault();
+
+    /// <summary>
+    /// Fallback for a remembered app that has no window or audio session yet (just launched, minimised
+    /// to the tray): the top-most running process with that name. Null when it isn't running.
+    /// </summary>
+    public static AudioApp? FindRunning(string processName)
+    {
+        var name = processName.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) ? processName[..^4] : processName;
+        var procs = Process.GetProcessesByName(name);
+        try
+        {
+            if (procs.Length == 0) return null;
+            var ids = procs.Select(p => p.Id).ToHashSet();
+            var parents = ParentMap();
+            var root = ids.FirstOrDefault(id => !parents.TryGetValue(id, out var parent) || !ids.Contains(parent), ids.First());
+            if (root == Environment.ProcessId) return null;
+            return new AudioApp(root, procs[0].ProcessName, procs[0].ProcessName, false, false, ExePath(root), null);
+        }
+        finally
+        {
+            foreach (var p in procs) p.Dispose();
+        }
+    }
+
+    /// <summary>True if any process with this name is running (cheap; used while waiting for an app to start).</summary>
+    public static bool IsRunning(string processName)
+    {
+        var name = processName.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) ? processName[..^4] : processName;
+        var procs = Process.GetProcessesByName(name);
+        foreach (var p in procs) p.Dispose();
+        return procs.Length > 0;
+    }
+
+    private static string? Describe(string? exe)
+    {
+        if (exe is null) return null;
+        try
+        {
+            var d = FileVersionInfo.GetVersionInfo(exe).FileDescription?.Trim();
+            return string.IsNullOrEmpty(d) || d.Length > 48 ? null : d;
+        }
+        catch (FileNotFoundException) { return null; }
+    }
+
+    private static string? ExePath(int pid)
+    {
+        var h = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid);
+        if (h == 0) return null;
+        try
+        {
+            var buf = new char[1024];
+            var len = buf.Length;
+            return QueryFullProcessImageName(h, 0, buf, ref len) ? new string(buf, 0, len) : null;
+        }
+        finally { CloseHandle(h); }
+    }
 
     // ---- Win32 ---------------------------------------------------------------------------
 
@@ -132,6 +196,7 @@ public static partial class AudioAppEnumerator
     private const long WS_EX_TOOLWINDOW = 0x80;
     private const uint GW_OWNER = 4;
     private const uint TH32CS_SNAPPROCESS = 0x2;
+    private const uint PROCESS_QUERY_LIMITED_INFORMATION = 0x1000;
 
     private delegate bool EnumWindowsProc(nint hwnd, nint lParam);
 
@@ -146,6 +211,8 @@ public static partial class AudioAppEnumerator
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode)] private static extern bool Process32First(nint snap, ref PROCESSENTRY32 e);
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode)] private static extern bool Process32Next(nint snap, ref PROCESSENTRY32 e);
     [DllImport("kernel32.dll")] private static extern bool CloseHandle(nint h);
+    [DllImport("kernel32.dll")] private static extern nint OpenProcess(uint access, bool inherit, int pid);
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode)] private static extern bool QueryFullProcessImageName(nint h, uint flags, [Out] char[] name, ref int size);
 
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
     private struct PROCESSENTRY32

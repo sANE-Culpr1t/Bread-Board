@@ -23,6 +23,9 @@ public static class ScreenshotTour
         window.ContentRendered += (_, _) => rendered.TrySetResult();
         await rendered.Task.WaitAsync(TimeSpan.FromSeconds(20)).ConfigureAwait(true);
         if (host.Soundboard.Items.Count == 0) await SeedAsync(host).ConfigureAwait(true);
+        if (host.Soundboard.Config.Devices.AppSource is null
+            && (await host.Soundboard.ListAppsAsync().ConfigureAwait(true)).FirstOrDefault(a => a.IsPlaying) is { } playing)
+            await host.Soundboard.SelectAppAsync(playing).ConfigureAwait(true); // show the App Audio strip live
 
         window.WindowState = WindowState.Normal;
         foreach (var (width, height, suffix) in new[] { (1440.0, 900.0, "wide"), (960.0, 720.0, "compact") })
@@ -51,6 +54,12 @@ public static class ScreenshotTour
             Save(dlg, Path.Combine(dir, $"{name}.png"));
             dlg.Close();
         }
+        var picker = Views.Dialogs.AppPickerDialog.Preview(host.Soundboard);
+        picker.Show();
+        await Task.Delay(1500).ConfigureAwait(true); // apps are listed on a worker thread
+        await Settle().ConfigureAwait(true);
+        Save(picker, Path.Combine(dir, "8-AppPicker.png"));
+        picker.Close();
         host.Soundboard.StopAll();
 
         Log.Info($"Screenshots written to {dir}");

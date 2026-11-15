@@ -1,0 +1,127 @@
+@import "tailwindcss";
+
+/* Design tokens. Runtime values live in --bb-* variables (set by lib/theme.ts,
+   driven by the Appearance Lab); Tailwind utilities map onto them. */
+@theme inline {
+  --color-desk: var(--bb-desktop);
+  --color-base: var(--bb-bg);
+  --color-side: var(--bb-sidebar);
+  --color-card: var(--bb-card);
+  --color-raised: var(--bb-elevated);
+  --color-hover: var(--bb-hover);
+  --color-track: var(--bb-track);
+  --color-line: var(--bb-line);
+  --color-line-strong: var(--bb-line-strong);
+  --color-ink: var(--bb-text);
+  --color-mute: var(--bb-muted);
+  --color-accent: var(--bb-accent);
+  --color-amber: var(--bb-accent-2);
+  --color-on-accent: var(--bb-on-accent);
+  --color-ok: var(--bb-ok);
+  --color-bad: var(--bb-bad);
+  --radius-bb: var(--bb-radius);
+  --shadow-pop: 0 24px 60px -20px rgb(0 0 0 / 0.75), inset 0 1px 0 rgb(255 255 255 / 0.05);
+  --shadow-window: 0 40px 100px -30px rgb(0 0 0 / 0.85), inset 0 1px 0 rgb(255 255 255 / 0.04);
+  --font-sans: "Segoe UI Variable Text", "Segoe UI", Inter, system-ui, sans-serif;
+}
+
+:root {
+  --bb-desktop: hsl(30 6% 5.5%);
+  --bb-bg: hsl(30 5% 9%);
+  --bb-sidebar: hsl(30 5% 11.5%);
+  --bb-card: hsl(30 5% 14%);
+  --bb-elevated: hsl(30 5% 17%);
+  --bb-hover: hsl(30 5% 20%);
+  --bb-track: hsl(30 5% 23%);
+  --bb-line: hsl(30 10% 90% / 0.06);
+  --bb-line-strong: hsl(30 10% 90% / 0.12);
+  --bb-text: #f4efe8;
+  --bb-muted: #8f8a84;
+  --bb-accent: #e3c8a4;
+  --bb-accent-2: #d9a35b;
+  --bb-on-accent: #1c1916;
+  --bb-ok: #6fae7a;
+  --bb-bad: #cf6f5f;
+  --bb-radius: 18px;
+  --bb-gap: 16px;
+  --bb-card-h: 136px;
+  color-scheme: dark;
+}
+
+html, body, #root { height: 100%; }
+body {
+  margin: 0;
+  background: var(--bb-desktop);
+  color: var(--bb-text);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+button { cursor: pointer; }
+button:disabled { cursor: default; }
+:focus-visible { outline: 2px solid color-mix(in srgb, var(--bb-accent) 70%, transparent); outline-offset: 2px; }
+
+/* Cards: three selectable styles (Appearance Lab) */
+.card { background: var(--bb-card); border-radius: var(--bb-radius); }
+[data-card="soft"] .card {
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.045), 0 12px 26px -16px rgb(0 0 0 / 0.8);
+}
+[data-card="flat"] .card { box-shadow: none; }
+[data-card="outlined"] .card { background: transparent; box-shadow: inset 0 0 0 1px var(--bb-line-strong); }
+.card.is-playing {
+  box-shadow: inset 0 0 0 1.5px var(--bb-accent), 0 0 30px -12px var(--bb-accent);
+}
+
+/* Range slider */
+.bb-range { -webkit-appearance: none; appearance: none; background: transparent; height: 22px; width: 100%; --fill: 50%; }
+.bb-range::-webkit-slider-runnable-track {
+  height: 6px; border-radius: 999px;
+  background: linear-gradient(to right, var(--bb-accent) var(--fill), var(--bb-track) var(--fill));
+}
+.bb-range::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 20px; height: 20px; border-radius: 50%; margin-top: -7px;
+  background: var(--bb-accent);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.55), inset 0 -2px 0 rgb(0 0 0 / 0.12);
+  transition: transform 0.15s ease;
+}
+.bb-range:active::-webkit-slider-thumb { transform: scale(1.12); }
+.bb-range::-moz-range-track { height: 6px; border-radius: 999px; background: var(--bb-track); }
+.bb-range::-moz-range-progress { height: 6px; border-radius: 999px; background: var(--bb-accent); }
+.bb-range::-moz-range-thumb { width: 20px; height: 20px; border: 0; border-radius: 50%; background: var(--bb-accent); }
+.bb-range:disabled { opacity: 0.4; }
+.bb-range.sm { height: 16px; }
+.bb-range.sm::-webkit-slider-runnable-track { height: 4px; }
+.bb-range.sm::-webkit-slider-thumb { width: 14px; height: 14px; margin-top: -5px; }
+
+/* Level meters */
+.meter-fill { background: linear-gradient(to right, var(--bb-ok) 0 64%, var(--bb-accent-2) 64% 86%, var(--bb-bad) 86%); }
+.meter-fill[data-vertical] { background: linear-gradient(to top, var(--bb-ok) 0 64%, var(--bb-accent-2) 64% 86%, var(--bb-bad) 86%); }
+
+/* Selects and text fields */
+.bb-field {
+  height: 40px; width: 100%; border-radius: 12px; padding: 0 12px;
+  background: var(--bb-sidebar); color: var(--bb-text);
+  border: 1px solid var(--bb-line-strong); outline: none;
+}
+.bb-field:focus { border-color: color-mix(in srgb, var(--bb-accent) 60%, transparent); }
+select.bb-field { appearance: none; padding-right: 32px;
+  background-image: linear-gradient(45deg, transparent 50%, var(--bb-muted) 50%), linear-gradient(135deg, var(--bb-muted) 50%, transparent 50%);
+  background-position: calc(100% - 18px) 50%, calc(100% - 13px) 50%; background-size: 5px 5px; background-repeat: no-repeat; }
+
+/* Equalizer icon */
+.eq { display: flex; align-items: flex-end; gap: 3px; height: 26px; }
+.eq span { width: 4px; border-radius: 2px; background: var(--bb-accent-2); transform-origin: bottom; }
+.eq.on span { animation: eq 0.9s ease-in-out infinite; }
+.eq.on span:nth-child(2) { animation-delay: -0.3s; }
+.eq.on span:nth-child(3) { animation-delay: -0.6s; }
+.eq.on span:nth-child(4) { animation-delay: -0.15s; }
+.eq.on span:nth-child(5) { animation-delay: -0.45s; }
+@keyframes eq { 0%, 100% { transform: scaleY(0.35); } 50% { transform: scaleY(1); } }
+
+/* Scrollbars */
+* { scrollbar-width: thin; scrollbar-color: var(--bb-track) transparent; }
+
+/* Motion level "off" kills CSS animation too */
+[data-motion="off"] *, [data-motion="off"] *::before, [data-motion="off"] *::after {
+  animation: none !important; transition: none !important;
+}

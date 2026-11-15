@@ -1,8 +1,10 @@
 <Solution>
   <Folder Name="/src/">
+    <Project Path="src/BreadBoard.App/BreadBoard.App.csproj" />
     <Project Path="src/BreadBoard.Audio/BreadBoard.Audio.csproj" />
     <Project Path="src/BreadBoard.Cli/BreadBoard.Cli.csproj" />
     <Project Path="src/BreadBoard.Core/BreadBoard.Core.csproj" />
+    <Project Path="src/BreadBoard.Platform/BreadBoard.Platform.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/BreadBoard.Tests/BreadBoard.Tests.csproj" />

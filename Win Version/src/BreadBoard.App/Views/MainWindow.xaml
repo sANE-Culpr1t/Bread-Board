@@ -1,0 +1,38 @@
+<Window x:Class="BreadBoard.App.Views.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Bread Board"
+        MinWidth="900" MinHeight="600"
+        Background="{StaticResource BaseBrush}"
+        Foreground="{StaticResource InkBrush}"
+        FontFamily="{StaticResource UiFont}"
+        UseLayoutRounding="True"
+        TextOptions.TextFormattingMode="Display">
+    <!-- Iteration 0 shell: sidebar + content host. The full design arrives in Iteration 1. -->
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="248"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
+
+        <Border Grid.Column="0" Background="{StaticResource SidebarBrush}" Padding="20,28,20,20">
+            <DockPanel LastChildFill="False">
+                <!-- Branding area reserved: the logo is added in Iteration 6. -->
+                <StackPanel DockPanel.Dock="Top" HorizontalAlignment="Center">
+                    <Border Width="96" Height="96" CornerRadius="18" BorderThickness="1.5"
+                            BorderBrush="{StaticResource LineBrush}" ToolTip="Reserved for the Bread Board logo"/>
+                    <TextBlock Text="Bread Board" Margin="0,14,0,0" HorizontalAlignment="Center"
+                               FontSize="26" FontWeight="Bold" Foreground="{StaticResource AccentBrush}"/>
+                    <TextBlock Text="Soundboard" HorizontalAlignment="Center" Foreground="{StaticResource MuteBrush}"/>
+                </StackPanel>
+
+                <StackPanel x:Name="Nav" DockPanel.Dock="Top" Margin="0,32,0,0" KeyboardNavigation.DirectionalNavigation="Cycle"/>
+
+                <TextBlock DockPanel.Dock="Bottom" x:Name="BuildInfo" HorizontalAlignment="Center"
+                           FontSize="11" Foreground="{StaticResource MuteBrush}"/>
+            </DockPanel>
+        </Border>
+
+        <ContentControl Grid.Column="1" x:Name="PageHost" Focusable="False" Margin="32,28,32,28"/>
+    </Grid>
+</Window>

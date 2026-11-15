@@ -22,7 +22,13 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\BreadBoard.Core\BreadBoard.Core.csproj" />
     <ProjectReference Include="..\..\src\BreadBoard.Audio\BreadBoard.Audio.csproj" />
+    <ProjectReference Include="..\..\src\BreadBoard.Platform\BreadBoard.Platform.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Build the app first; lifecycle tests launch its exe. -->
+    <ProjectReference Include="..\..\src\BreadBoard.App\BreadBoard.App.csproj" ReferenceOutputAssembly="false" />
+  </ItemGroup>
 </Project>
+
 

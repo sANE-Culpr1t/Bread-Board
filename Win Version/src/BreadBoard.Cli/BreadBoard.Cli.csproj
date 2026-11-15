@@ -3,6 +3,7 @@
   <ItemGroup>
     <ProjectReference Include="..\BreadBoard.Core\BreadBoard.Core.csproj" />
     <ProjectReference Include="..\BreadBoard.Audio\BreadBoard.Audio.csproj" />
+    <ProjectReference Include="..\BreadBoard.Platform\BreadBoard.Platform.csproj" />
   </ItemGroup>
 
   <PropertyGroup>

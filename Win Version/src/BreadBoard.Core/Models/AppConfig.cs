@@ -100,9 +100,21 @@ public sealed class SoundSite
     public string Url { get; set; } = "";
 }
 
+/// <summary>Window placement and navigation state restored on the next launch.</summary>
+public sealed class UiSettings
+{
+    public double? WindowLeft { get; set; }
+    public double? WindowTop { get; set; }
+    public double WindowWidth { get; set; } = 1280;
+    public double WindowHeight { get; set; } = 800;
+    public bool WindowMaximized { get; set; }
+    public string LastPage { get; set; } = "Soundboard";
+}
+
 public sealed class AppConfig
 {
     public int Version { get; set; } = 1;
+    public UiSettings Ui { get; set; } = new();
     public List<SoundEntry> Sounds { get; set; } = [];
     public List<string> Categories { get; set; } = ["Memes", "Reactions", "Effects", "Music"];
     public ChannelSet Channels { get; set; } = new();

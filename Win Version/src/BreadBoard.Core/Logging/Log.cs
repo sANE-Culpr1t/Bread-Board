@@ -1,70 +1,103 @@
 using System.Collections.Concurrent;
+using System.Runtime.CompilerServices;
 using System.Text;
+using System.Text.Json;
 
 namespace BreadBoard.Core.Logging;
 
 public enum LogLevel { Debug, Info, Warn, Error }
 
 /// <summary>
-/// Minimal non-blocking file logger. Callers (including audio threads) only enqueue;
-/// a background task writes. One file per day, kept for 7 days.
+/// Structured, non-blocking logger. Each entry is one JSON object per line
+/// (<c>{"t","lvl","cat","msg","thread","ex"}</c>) in <c>breadboard-yyyyMMdd.jsonl</c>.
+/// The category is the calling source file, so call sites stay one-liners.
+/// Callers only enqueue (safe on audio threads); a background task writes in batches.
+/// The writer task only exists after <see cref="Init"/> and sleeps when idle (no timers).
 /// </summary>
 public static class Log
 {
-    private static readonly ConcurrentQueue<string> Queue = new();
+    private readonly record struct Entry(DateTimeOffset Time, LogLevel Level, string Category, string Message, int Thread, Exception? Error);
+
+    private static readonly ConcurrentQueue<Entry> Queue = new();
     private static readonly SemaphoreSlim Signal = new(0);
+    private static readonly ManualResetEventSlim Idle = new(true);
     private static string? _dir;
     private static Task? _writer;
 
     public static LogLevel MinLevel { get; set; } = LogLevel.Info;
 
-    /// <summary>Also echo entries to this sink (e.g. Console.Error for the CLI).</summary>
+    /// <summary>Also echo human-readable lines to this sink (e.g. Console.Error).</summary>
     public static Action<string>? Echo { get; set; }
+
+    public static string? Directory => _dir;
 
     public static void Init(string directory)
     {
         _dir = directory;
-        Directory.CreateDirectory(directory);
+        System.IO.Directory.CreateDirectory(directory);
         Prune(directory);
         _writer ??= Task.Run(WriteLoop);
     }
 
-    public static void Debug(string msg) => Write(LogLevel.Debug, msg, null);
-    public static void Info(string msg) => Write(LogLevel.Info, msg, null);
-    public static void Warn(string msg, Exception? ex = null) => Write(LogLevel.Warn, msg, ex);
-    public static void Error(string msg, Exception? ex = null) => Write(LogLevel.Error, msg, ex);
+    public static void Debug(string msg, [CallerFilePath] string file = "") => Write(LogLevel.Debug, msg, null, file);
+    public static void Info(string msg, [CallerFilePath] string file = "") => Write(LogLevel.Info, msg, null, file);
+    public static void Warn(string msg, Exception? ex = null, [CallerFilePath] string file = "") => Write(LogLevel.Warn, msg, ex, file);
+    public static void Error(string msg, Exception? ex = null, [CallerFilePath] string file = "") => Write(LogLevel.Error, msg, ex, file);
 
-    private static void Write(LogLevel level, string msg, Exception? ex)
+    private static void Write(LogLevel level, string msg, Exception? ex, string file)
     {
         if (level < MinLevel) return;
-        var line = $"{DateTime.Now:HH:mm:ss.fff} [{level.ToString().ToUpperInvariant(),-5}] {msg}";
-        if (ex is not null) line += $" | {ex.GetType().Name}: {ex.Message}";
-        Echo?.Invoke(line);
-        Queue.Enqueue(ex is null ? line : line + Environment.NewLine + ex);
+        var e = new Entry(DateTimeOffset.Now, level, Path.GetFileNameWithoutExtension(file), msg, Environment.CurrentManagedThreadId, ex);
+        Echo?.Invoke($"{e.Time:HH:mm:ss.fff} {level.ToString().ToUpperInvariant(),-5} [{e.Category}] {msg}{(ex is null ? "" : $" | {ex.GetType().Name}: {ex.Message}")}");
+        Idle.Reset();
+        Queue.Enqueue(e);
         Signal.Release();
     }
 
-    /// <summary>Waits until queued entries are written (call on shutdown).</summary>
-    public static void Flush()
+    /// <summary>Blocks until queued entries are on disk (call on shutdown). Bounded wait.</summary>
+    public static void Flush(int timeoutMs = 2000)
     {
-        for (var i = 0; i < 50 && !Queue.IsEmpty; i++) Thread.Sleep(10);
+        if (_writer is null) return;
+        Signal.Release();
+        Idle.Wait(timeoutMs);
     }
 
     private static async Task WriteLoop()
     {
-        var sb = new StringBuilder();
+        using var ms = new MemoryStream();
         while (true)
         {
             await Signal.WaitAsync().ConfigureAwait(false);
-            await Task.Delay(100).ConfigureAwait(false); // batch bursts
-            sb.Clear();
-            while (Queue.TryDequeue(out var line)) sb.AppendLine(line);
-            if (_dir is null || sb.Length == 0) continue;
-            try
+            await Task.Delay(50).ConfigureAwait(false); // batch bursts
+            ms.SetLength(0);
+            using (var w = new Utf8JsonWriter(ms))
             {
-                await File.AppendAllTextAsync(Path.Combine(_dir, $"breadboard-{DateTime.Now:yyyyMMdd}.log"), sb.ToString()).ConfigureAwait(false);
+                while (Queue.TryDequeue(out var e))
+                {
+                    w.WriteStartObject();
+                    w.WriteString("t", e.Time);
+                    w.WriteString("lvl", e.Level.ToString().ToLowerInvariant());
+                    w.WriteString("cat", e.Category);
+                    w.WriteString("msg", e.Message);
+                    w.WriteNumber("thread", e.Thread);
+                    if (e.Error is not null) w.WriteString("ex", e.Error.ToString());
+                    w.WriteEndObject();
+                    w.Flush();
+                    ms.WriteByte((byte)'\n');
+                    w.Reset(ms);
+                }
             }
-            catch (IOException) { /* disk issue: drop rather than crash */ }
+            if (_dir is not null && ms.Length > 0)
+            {
+                try
+                {
+                    await using var f = new FileStream(Path.Combine(_dir, $"breadboard-{DateTime.Now:yyyyMMdd}.jsonl"), FileMode.Append, FileAccess.Write, FileShare.ReadWrite);
+                    ms.Position = 0;
+                    await ms.CopyToAsync(f).ConfigureAwait(false);
+                }
+                catch (IOException) { /* disk issue: drop rather than crash */ }
+            }
+            if (Queue.IsEmpty) Idle.Set();
         }
     }
 
@@ -72,9 +105,19 @@ public static class Log
     {
         try
         {
-            foreach (var f in Directory.EnumerateFiles(dir, "breadboard-*.log"))
+            foreach (var f in System.IO.Directory.EnumerateFiles(dir, "breadboard-*.*"))
                 if (File.GetLastWriteTime(f) < DateTime.Now.AddDays(-7)) File.Delete(f);
         }
         catch (IOException) { }
+    }
+
+    /// <summary>Readable form of a JSON-lines entry (used by tooling and tests).</summary>
+    public static string Describe(string jsonLine)
+    {
+        using var doc = JsonDocument.Parse(jsonLine);
+        var r = doc.RootElement;
+        var sb = new StringBuilder();
+        sb.Append(r.GetProperty("lvl").GetString()).Append(" [").Append(r.GetProperty("cat").GetString()).Append("] ").Append(r.GetProperty("msg").GetString());
+        return sb.ToString();
     }
 }

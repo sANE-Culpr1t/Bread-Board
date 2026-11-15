@@ -8,7 +8,7 @@
 using BreadBoard.Audio;
 using BreadBoard.Audio.Devices;
 using BreadBoard.Audio.Import;
-using BreadBoard.Audio.Input;
+using BreadBoard.Platform.Hotkeys;
 using BreadBoard.Core.Hotkeys;
 using BreadBoard.Audio.Soundboard;
 using BreadBoard.Audio.Sources;
@@ -333,3 +333,4 @@ static string Bar(float level)
 }
 
 static string Trim(string s, int max) => s.Length <= max ? s : s[..(max - 1)] + "…";
+

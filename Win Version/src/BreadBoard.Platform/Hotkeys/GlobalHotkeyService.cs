@@ -1,9 +1,9 @@
-using System.Collections.Concurrent;
+﻿using System.Collections.Concurrent;
 using System.Runtime.InteropServices;
 using BreadBoard.Core.Hotkeys;
 using BreadBoard.Core.Logging;
 
-namespace BreadBoard.Audio.Input;
+namespace BreadBoard.Platform.Hotkeys;
 
 /// <summary>
 /// System-wide hotkeys via RegisterHotKey: they fire while any other app (Discord, a game) has focus.
@@ -98,7 +98,7 @@ public sealed class GlobalHotkeyService : IDisposable
         try { a(); } catch (Exception ex) { Log.Error("Hotkey handler failed", ex); }
     }
 
-    /// <summary>Maps the shared key names ("A", "1", "Num1", "F5", "Space"…) to Win32 virtual-key codes.</summary>
+    /// <summary>Maps the shared key names ("A", "1", "Num1", "F5", "Space"â€¦) to Win32 virtual-key codes.</summary>
     public static uint? VirtualKey(string key)
     {
         if (key.Length == 1 && char.IsAsciiLetterOrDigit(key[0])) return char.ToUpperInvariant(key[0]);
@@ -141,3 +141,4 @@ public sealed class GlobalHotkeyService : IDisposable
     [DllImport("user32.dll")] private static extern short GetAsyncKeyState(int vk);
     [DllImport("kernel32.dll")] private static extern uint GetCurrentThreadId();
 }
+

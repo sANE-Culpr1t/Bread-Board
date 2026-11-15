@@ -1,8 +1,27 @@
-# Bread Board — Win Version (native backend)
+# Bread Board — Win Version
 
-C# / .NET 10 backend for the Windows app. This stage is the **audio engine and services**,
-driven by a small command-line test host. The WPF UI (built from the approved web prototype)
-comes next and will sit on top of `AudioHost`.
+Windows desktop app (C# / .NET 10, WPF). Progress is tracked per iteration in [CHANGELOG.md](CHANGELOG.md).
+
+Run the app:
+
+```bash
+dotnet run --project src/BreadBoard.App
+```
+
+Release build: `dotnet publish src/BreadBoard.App -c Release -o artifacts/release` → `artifacts/release/BreadBoard.exe`.
+
+App switches (for testing): `--data-dir <folder>` keep all data in one folder · `--smoke-test` · `--perf <seconds>`.
+
+Module layout:
+
+| Project | Responsibility |
+|---|---|
+| BreadBoard.App | Startup/lifecycle (`Lifecycle/`), UI and navigation (`Views/`, `Navigation/`, `Theme/`), diagnostics |
+| BreadBoard.Core | Configuration and persistence, logging, hotkey rules, web-link rules (no Windows APIs) |
+| BreadBoard.Audio | Audio engine and audio device management |
+| BreadBoard.Platform | Global hotkeys, single instance (Win32) |
+| Browser integration | Planned as its own module in Iteration 3 (WebView2, loaded on first use) |
+| BreadBoard.Cli | `bb` test host for the audio engine |
 
 ## Requirements
 

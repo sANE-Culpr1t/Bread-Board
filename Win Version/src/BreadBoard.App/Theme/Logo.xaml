@@ -1,0 +1,64 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <!--
+        Bread Board logo: a slice of bread with a sound wave baked into the crumb and two AUX (3.5 mm)
+        cables plugged into its base, curling away to either side. Pure vector; scales from 16 px to 256 px.
+        Canvas 0..100.
+    -->
+    <DrawingImage x:Key="LogoImage">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <!-- invisible frame keeps the 0..100 box so every size is centred the same way -->
+                <GeometryDrawing Brush="Transparent" Geometry="M0,0 H100 V100 H0 Z"/>
+
+                <!-- AUX cables (behind the slice) -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Pen>
+                        <Pen Brush="#8F8A84" Thickness="4.6" StartLineCap="Round" EndLineCap="Round"/>
+                    </GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M38,90 C38,97 30,98 22,96 C13,94 7,97 5,99 M62,90 C62,97 70,98 78,96 C87,94 93,97 95,99"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+
+                <!-- Crust -->
+                <GeometryDrawing Brush="#D9A35B"
+                                 Geometry="M22,44 C12,44 7,37 9,29 C11,18 26,10 50,10 C74,10 89,18 91,29 C93,37 88,44 78,44 L78,80 C78,85 74,88 69,88 L31,88 C26,88 22,85 22,80 Z"/>
+                <!-- Crumb -->
+                <GeometryDrawing Brush="#F1E3CD"
+                                 Geometry="M28,47 C20,47 16,41 17.5,34 C19,25 31,17 50,17 C69,17 81,25 82.5,34 C84,41 80,47 72,47 L72,79 C72,81.5 70.5,83 68,83 L32,83 C29.5,83 28,81.5 28,79 Z"/>
+
+                <!-- Sound wave baked into the crumb -->
+                <GeometryDrawing Brush="#2D2B29">
+                    <GeometryDrawing.Geometry>
+                        <GeometryGroup>
+                            <RectangleGeometry Rect="34,54 4,10" RadiusX="2" RadiusY="2"/>
+                            <RectangleGeometry Rect="41,46 4,26" RadiusX="2" RadiusY="2"/>
+                            <RectangleGeometry Rect="48,40 4,38" RadiusX="2" RadiusY="2"/>
+                            <RectangleGeometry Rect="55,48 4,22" RadiusX="2" RadiusY="2"/>
+                            <RectangleGeometry Rect="62,53 4,12" RadiusX="2" RadiusY="2"/>
+                        </GeometryGroup>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+
+                <!-- AUX jacks plugged into the base: metal sleeve, black ring, tip -->
+                <GeometryDrawing Brush="#2D2B29">
+                    <GeometryDrawing.Geometry>
+                        <GeometryGroup>
+                            <RectangleGeometry Rect="33.5,83 9,9" RadiusX="2" RadiusY="2"/>
+                            <RectangleGeometry Rect="57.5,83 9,9" RadiusX="2" RadiusY="2"/>
+                        </GeometryGroup>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <GeometryDrawing Brush="#E3C8A4">
+                    <GeometryDrawing.Geometry>
+                        <GeometryGroup>
+                            <RectangleGeometry Rect="34.5,86.4 7,1.6"/>
+                            <RectangleGeometry Rect="58.5,86.4 7,1.6"/>
+                        </GeometryGroup>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+</ResourceDictionary>

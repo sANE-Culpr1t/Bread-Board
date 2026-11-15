@@ -3,6 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:t="clr-namespace:BreadBoard.App.Theme"
         Title="Bread Board"
+        Icon="pack://application:,,,/Assets/BreadBoard.ico"
         MinWidth="820" MinHeight="600"
         Background="{StaticResource BaseBrush}"
         Foreground="{StaticResource InkBrush}"
@@ -24,10 +25,9 @@
             <!-- ============ Sidebar ============ -->
             <Border Grid.Column="0" Background="{StaticResource SidebarBrush}" Padding="16,24,16,18">
                 <DockPanel LastChildFill="False">
-                    <!-- Branding area reserved: the logo arrives in Iteration 6. -->
                     <StackPanel DockPanel.Dock="Top" HorizontalAlignment="Center">
-                        <Border x:Name="LogoSpot" Width="92" Height="92" CornerRadius="18" BorderThickness="1.5"
-                                BorderBrush="{StaticResource LineBrush}" ToolTip="Reserved for the Bread Board logo"/>
+                        <Image x:Name="LogoSpot" Width="92" Height="92" Source="{StaticResource LogoImage}"
+                               RenderOptions.BitmapScalingMode="HighQuality" AutomationProperties.Name="Bread Board logo"/>
                         <StackPanel x:Name="BrandText" Margin="0,12,0,0">
                             <TextBlock Text="Bread Board" HorizontalAlignment="Center" FontSize="26" FontWeight="Bold" Foreground="{StaticResource AccentBrush}"/>
                             <TextBlock Text="Soundboard" HorizontalAlignment="Center" Foreground="{StaticResource MuteBrush}"/>

@@ -7,12 +7,19 @@
     <AssemblyName>BreadBoard</AssemblyName>
     <RootNamespace>BreadBoard.App</RootNamespace>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <Version>0.5.0</Version>
+    <Version>1.0.0</Version>
+    <ApplicationIcon>Assets\BreadBoard.ico</ApplicationIcon>
+    <!-- English-only UI: don't ship satellite resource folders. -->
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
     <!-- Startup: precompile on publish, keep the dynamic PGO/tiering defaults. -->
     <PublishReadyToRun>true</PublishReadyToRun>
     <RuntimeIdentifier Condition="'$(Configuration)' == 'Release'">win-x64</RuntimeIdentifier>
     <SelfContained>false</SelfContained>
   </PropertyGroup>
+
+  <ItemGroup>
+    <Resource Include="Assets\BreadBoard.ico" />
+  </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\BreadBoard.Core\BreadBoard.Core.csproj" />

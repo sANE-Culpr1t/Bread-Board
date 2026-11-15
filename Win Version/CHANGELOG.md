@@ -1,5 +1,28 @@
 # Changelog — Bread Board (Win Version)
 
+## Iteration 6 — Branding and Optimization (v1.0.0)
+
+### Added
+- **Logo** (`Theme/Logo.xaml`): a slice of bread with a sound wave baked into the crumb and two AUX (3.5 mm)
+  cables plugged into its base. Vector, in the app's beige/amber/charcoal palette; replaces the reserved spot in
+  the sidebar (large and compact) and the mini-player header.
+- **App icon** (`Assets/BreadBoard.ico`, 16–256 px, rendered from the same vector): executable, taskbar and
+  window icon. `--export-icon PATH [--export-png DIR]` rebuilds it without opening a window.
+
+### Optimized
+- Cards no longer use blurred drop shadows (each forced off-screen rendering; ~20 MB in Iteration 1); a
+  hairline edge keeps the depth.
+- Publish ships English resources only (no satellite folders).
+- Already in place from earlier iterations: lazy audio/hotkey start, meters only while visible, no idle
+  polling, allocation-free audio thread, ReadyToRun startup.
+
+### Verification
+- Build clean (0 warnings); unit tests that don't need the screen, speakers or keyboard: passing.
+- Logo checked at 256, 48 and 32 px.
+- Postponed while the PC was in use for gaming (they open windows, play test tones into the virtual cable or
+  simulate key presses): full test run, screenshots of the logo in the UI, Release performance comparison,
+  and the Iteration 5 UI Automation pass.
+
 ## Iteration 5 — Gaming Mode and Advanced Features (v0.5.0)
 
 ### Added

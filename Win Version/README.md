@@ -10,7 +10,12 @@ dotnet run --project src/BreadBoard.App
 
 Release build: `dotnet publish src/BreadBoard.App -c Release -o artifacts/release` → `artifacts/release/BreadBoard.exe`.
 
-App switches (for testing): `--data-dir <folder>` keep all data in one folder · `--smoke-test` · `--perf <seconds>` · `--screenshots <folder>`.
+App switches (for testing): `--data-dir <folder>` keep all data in one folder · `--smoke-test` · `--perf <seconds>` · `--screenshots <folder>` · `--export-icon <file.ico> [--export-png <folder>]`.
+
+Features: soundboard with global shortcuts (one-shot / toggle / loop / hold, per-sound volume and route,
+sequences, random), sound import from files or Myinstants links, App Audio (any running app), live mixer
+(mic, app, soundboard, master; gate, compressor, limiter, ducking; push-to-talk), device choice and
+monitor-only fallback, profiles, and a floating mini-player for gaming.
 
 Module layout:
 
@@ -104,5 +109,5 @@ key only while it is held). `bb run` binds each sound's hotkey, or Num1–Num9 b
 Tip: set VB-Cable to 48 kHz (Sound settings → "CABLE Input"/"Speakers (VB-Audio…)" and "CABLE Output" →
 Properties → Advanced → 2 channel, 24 bit, 48000 Hz). At other rates Bread Board resamples, which costs a little quality.
 
-Not yet built: profiles, per-sound routing, random/sequences (Iteration 5), logo (Iteration 6).
+All six iterations are built; see CHANGELOG.md for what each one verified.
 Not yet tested: Discord / Valorant / OBS end to end (in progress), long-running stability.

@@ -40,14 +40,13 @@
         <Setter Property="VerticalAlignment" Value="Center"/>
     </Style>
 
+    <!-- Raised card. A hairline edge instead of a blurred drop shadow: shadows force every card to be
+         rendered off-screen (≈20 MB and GPU time for a full soundboard). -->
     <Style x:Key="Card" TargetType="Border">
         <Setter Property="Background" Value="{StaticResource CardBrush}"/>
         <Setter Property="CornerRadius" Value="{StaticResource RadiusCard}"/>
-        <Setter Property="Effect">
-            <Setter.Value>
-                <DropShadowEffect BlurRadius="18" ShadowDepth="4" Direction="270" Opacity="0.35" Color="Black" RenderingBias="Performance"/>
-            </Setter.Value>
-        </Setter>
+        <Setter Property="BorderBrush" Value="{StaticResource LineBrush}"/>
+        <Setter Property="BorderThickness" Value="1"/>
     </Style>
 
     <!-- Card without shadow, for dense lists (cheaper to render). -->

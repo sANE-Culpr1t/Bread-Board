@@ -35,8 +35,7 @@
                             Content="{x:Static t:Glyph.Close}" ToolTip="Close mini-player" AutomationProperties.Name="Close mini-player" Cursor="Hand"/>
                 </StackPanel>
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                    <!-- Logo placeholder (Iteration 6) -->
-                    <Border Width="24" Height="24" CornerRadius="6" BorderThickness="1.2" BorderBrush="{StaticResource LineBrush}" Margin="0,0,10,0"/>
+                    <Image Width="24" Height="24" Source="{StaticResource LogoImage}" Margin="0,0,8,0"/>
                     <TextBlock Text="Bread Board" FontWeight="SemiBold" VerticalAlignment="Center"/>
                     <Ellipse x:Name="EngineDot" Width="8" Height="8" Fill="{StaticResource MuteBrush}" Margin="10,0,0,0" VerticalAlignment="Center"/>
                 </StackPanel>

@@ -1,4 +1,4 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 using System.Windows;
 using System.Windows.Threading;
 using BreadBoard.App.Diagnostics;
@@ -26,6 +26,14 @@ public partial class App : Application
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+        var exportIcon = Array.IndexOf(e.Args, "--export-icon");
+        if (exportIcon >= 0 && exportIcon + 1 < e.Args.Length)
+        {
+            var png = Array.IndexOf(e.Args, "--export-png");
+            IconExport.Run(e.Args[exportIcon + 1], png >= 0 && png + 1 < e.Args.Length ? e.Args[png + 1] : null);
+            Shutdown(0);
+            return;
+        }
         Options = StartupOptions.Parse(e.Args);
         if (Options.DataDir is not null) AppPaths.UseRoot(Options.DataDir);
         Log.Init(AppPaths.Logs);

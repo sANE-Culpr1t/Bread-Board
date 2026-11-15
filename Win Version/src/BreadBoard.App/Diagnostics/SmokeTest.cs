@@ -32,11 +32,21 @@ public static class SmokeTest
         }
         host.Navigation.Navigate(PageId.Shortcuts); // so the next launch can verify it was remembered
 
+        // Mini-player: opens, honours the always-on-top setting, closes cleanly.
+        var main = (Views.MainWindow)window;
+        main.ShowMini();
+        await Task.Delay(100).ConfigureAwait(true);
+        var miniOpened = main.MiniPlayer is not null;
+        var miniTopmost = main.MiniPlayer?.Topmost ?? false;
+        main.MiniPlayer?.Close();
+
         var result = new
         {
             startupMs = Math.Round(startupMs),
             startPage = startPage.ToString(),
             pagesVisited = visited,
+            miniOpened,
+            miniTopmost,
             audioCreated = host.AudioCreated,
             hotkeysCreated = host.HotkeysCreated,
             webView2Loaded = AppDomain.CurrentDomain.GetAssemblies().Any(a => a.GetName().Name?.Contains("WebView2", StringComparison.OrdinalIgnoreCase) == true),

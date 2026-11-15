@@ -98,7 +98,7 @@ public sealed class GlobalHotkeyService : IDisposable
         try { a(); } catch (Exception ex) { Log.Error("Hotkey handler failed", ex); }
     }
 
-    /// <summary>Maps the shared key names ("A", "1", "Num1", "F5", "Space"â€¦) to Win32 virtual-key codes.</summary>
+    /// <summary>Maps the shared key names ("A", "1", "Num1", "F5", "Space"…) to Win32 virtual-key codes.</summary>
     public static uint? VirtualKey(string key)
     {
         if (key.Length == 1 && char.IsAsciiLetterOrDigit(key[0])) return char.ToUpperInvariant(key[0]);

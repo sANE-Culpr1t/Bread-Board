@@ -51,6 +51,7 @@ public partial class App : Application
 
         if (Options.SmokeTest) _ = SmokeTest.RunAsync(_host, _window);
         if (Options.PerfSeconds is { } secs) _ = PerfProbe.RunAsync(_window, secs);
+        if (Options.ScreenshotDir is { } shots) _ = ScreenshotTour.RunAsync(_host, _window, shots);
     }
 
     /// <summary>Orderly exit: services first, then the dispatcher.</summary>

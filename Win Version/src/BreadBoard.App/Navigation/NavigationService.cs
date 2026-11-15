@@ -4,7 +4,7 @@ using BreadBoard.Core.Logging;
 
 namespace BreadBoard.App.Navigation;
 
-public enum PageId { Soundboard, WebPlayer, Mixer, Shortcuts, Settings }
+public enum PageId { Soundboard, Mixer, Shortcuts, Settings }
 
 /// <summary>
 /// Creates each page the first time it is shown and keeps it (no work for pages never visited).

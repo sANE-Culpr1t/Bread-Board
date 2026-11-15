@@ -96,7 +96,9 @@ public sealed class AppLifecycleTests : IDisposable
     public async Task Starts_visits_pages_shuts_down_and_remembers_state()
     {
         var first = await RunSmoke();
-        Assert.Equal(5, first.GetProperty("pagesVisited").GetArrayLength());
+        Assert.Equal(4, first.GetProperty("pagesVisited").GetArrayLength());
+        Assert.True(first.GetProperty("miniOpened").GetBoolean());
+        Assert.True(first.GetProperty("miniTopmost").GetBoolean()); // default: keep on top
         Assert.False(first.GetProperty("audioCreated").GetBoolean());   // heavy modules stay unloaded
         Assert.False(first.GetProperty("hotkeysCreated").GetBoolean());
         Assert.False(first.GetProperty("webView2Loaded").GetBoolean());

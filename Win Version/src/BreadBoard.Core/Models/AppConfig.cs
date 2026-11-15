@@ -109,6 +109,13 @@ public sealed class UiSettings
     public double WindowHeight { get; set; } = 800;
     public bool WindowMaximized { get; set; }
     public string LastPage { get; set; } = "Soundboard";
+
+    public double? MiniLeft { get; set; }
+    public double? MiniTop { get; set; }
+    public double MiniWidth { get; set; } = 320;
+    public double MiniHeight { get; set; } = 420;
+    public bool MiniTopmost { get; set; } = true;
+    public bool MiniOpenOnStart { get; set; }
 }
 
 public sealed class AppConfig

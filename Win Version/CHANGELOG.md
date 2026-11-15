@@ -3,10 +3,9 @@
 ## Iteration 6 — Branding and Optimization (v1.0.0)
 
 ### Added
-- **Logo** (`Theme/Logo.xaml`): a slice of bread with a sound wave baked into the crumb and two AUX (3.5 mm)
-  cables plugged into its base. Vector, in the app's beige/amber/charcoal palette; replaces the reserved spot in
-  the sidebar (large and compact) and the mini-player header.
-- **App icon** (`Assets/BreadBoard.ico`, 16–256 px, rendered from the same vector): executable, taskbar and
+- **Logo**: your `Bread-Board-Logo.png` (smiling loaf with three AUX cables), cropped to the artwork and squared
+  into `Assets/Logo.png` (512 px, transparent). Shown in the sidebar (large and compact) and the mini-player header.
+- **App icon** (`Assets/BreadBoard.ico`, 16–256 px, rendered from the logo): executable, taskbar and
   window icon. `--export-icon PATH [--export-png DIR]` rebuilds it without opening a window.
 
 ### Optimized

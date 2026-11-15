@@ -19,6 +19,7 @@
 
   <ItemGroup>
     <Resource Include="Assets\BreadBoard.ico" />
+    <Resource Include="Assets\Logo.png" />
   </ItemGroup>
 
   <ItemGroup>

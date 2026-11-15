@@ -47,7 +47,7 @@ export function defaultData(): AppData {
       master: { gain: 90, muted: false, toVirtualMic: true, toMonitor: false },
     },
     processing: {
-      noiseGate: { enabled: true, threshold: 12 },
+      noiseGate: { enabled: true, threshold: 4 },
       compressor: { enabled: false, amount: 40 },
       limiter: { enabled: true, ceiling: 92 },
       ducking: { enabled: false, amount: 50 },

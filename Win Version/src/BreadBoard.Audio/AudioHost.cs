@@ -1,0 +1,297 @@
+using BreadBoard.Audio.Devices;
+using BreadBoard.Audio.Dsp;
+using BreadBoard.Audio.Mixing;
+using BreadBoard.Audio.Output;
+using BreadBoard.Audio.Soundboard;
+using BreadBoard.Audio.Sources;
+using BreadBoard.Core.Logging;
+using BreadBoard.Core.Models;
+
+namespace BreadBoard.Audio;
+
+public enum SourceState { Off, Starting, Running, Unavailable, Failed }
+
+public sealed record SourceStatus(SourceState State, string? Name, string? Error = null);
+
+public sealed record HostStatus(SourceStatus Mic, SourceStatus App, SourceStatus Output, SourceStatus Monitor);
+
+/// <summary>
+/// Owns the audio graph: devices, capture sources, mixer and outputs. Applies settings from
+/// <see cref="AppConfig"/> and restarts anything that fails (device unplugged, app closed).
+/// All public methods are safe to call from the UI thread; work is serialised internally.
+/// </summary>
+public sealed class AudioHost : IAsyncDisposable
+{
+    private readonly SemaphoreSlim _lock = new(1, 1);
+    private readonly CancellationTokenSource _life = new();
+    private CaptureSource? _mic, _app;
+    private OutputDevice? _output, _monitor;
+    private AppConfig _config = new();
+    private SourceStatus _micStatus = new(SourceState.Off, null), _appStatus = new(SourceState.Off, null);
+    private SourceStatus _outStatus = new(SourceState.Off, null), _monStatus = new(SourceState.Off, null);
+    private int _retryPending;
+
+    public AudioHost()
+    {
+        Soundboard = new SoundboardEngine();
+        Mixer = new MixerEngine(Soundboard);
+        Devices = new DeviceService();
+        Devices.DevicesChanged += () => ScheduleRecovery("devices changed", 0);
+    }
+
+    public DeviceService Devices { get; }
+    public SoundboardEngine Soundboard { get; }
+    public MixerEngine Mixer { get; }
+
+    public HostStatus Status => new(_micStatus, _appStatus, _outStatus, _monStatus);
+    public event Action<HostStatus>? StatusChanged;
+
+    /// <summary>Starts (or restarts) everything for <paramref name="config"/>.</summary>
+    public async Task StartAsync(AppConfig config)
+    {
+        await _lock.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            _config = config;
+            ApplyMixSettings(config);
+            await RebuildAsync().ConfigureAwait(false);
+        }
+        finally { _lock.Release(); }
+    }
+
+    /// <summary>Applies gains, mutes, routing and processing immediately (no device restart).</summary>
+    public void ApplyMixSettings(AppConfig c)
+    {
+        _config = c;
+        Apply(Mixer.Mic, Mixer.MicRouting, c.Channels.Mic);
+        Apply(Mixer.App, Mixer.AppRouting, c.Channels.App);
+        Apply(Mixer.Board, Mixer.BoardRouting, c.Channels.Soundboard);
+        Apply(Mixer.Master, Mixer.MasterRouting, c.Channels.Master);
+        Mixer.MasterRouting.ToMain = c.Devices.VirtualMicEnabled;
+
+        var p = c.Processing;
+        Mixer.Gate.Enabled = p.NoiseGate.Enabled;
+        Mixer.Gate.Threshold = p.NoiseGate.Value / 100f;
+        Mixer.MicCompressor.Enabled = p.Compressor.Enabled;
+        Mixer.MicCompressor.Amount = p.Compressor.Value / 100f;
+        Mixer.MasterLimiter.Enabled = p.Limiter.Enabled;
+        Mixer.MasterLimiter.Ceiling = p.Limiter.Value / 100f;
+        Mixer.AppDucker.Enabled = p.Ducking.Enabled;
+        Mixer.AppDucker.Amount = p.Ducking.Value / 100f;
+        Mixer.PushToTalkEnabled = p.PushToTalk.Enabled;
+
+        Soundboard.AllowStacking = c.Playback.AllowStacking;
+        Soundboard.MaxVoices = c.Playback.MaxVoices;
+
+        static void Apply(ChannelStrip strip, ChannelRouting routing, ChannelSettings s)
+        {
+            strip.Gain = s.Gain / 100f;
+            strip.Muted = s.Muted;
+            routing.ToMain = s.ToVirtualMic;
+            routing.ToMonitor = s.ToMonitor;
+        }
+    }
+
+    /// <summary>Changes devices / app source and restarts only what changed.</summary>
+    public Task UpdateDevicesAsync(AppConfig config) => StartAsync(config);
+
+    /// <summary>Decodes and registers a sound so it can be triggered. Runs on a worker thread.</summary>
+    public Task<SoundClip> LoadSoundAsync(SoundEntry s) => Task.Run(() =>
+    {
+        var clip = SoundLoader.Load(s.Id, s.FilePath);
+        Soundboard.Register(s.Id, clip, s.Mode, s.Volume);
+        return clip;
+    });
+
+    // ---- graph management (always under _lock) -------------------------------------------
+
+    private async Task RebuildAsync()
+    {
+        var dev = _config.Devices;
+
+        // Output (virtual cable) — started first so its name is known for the feedback check.
+        var outDevice = dev.OutputDeviceId is null
+            ? (Devices.FindVirtualCableOutput() is { } cable ? Devices.Resolve(DeviceKind.Output, cable.Id) : null)
+            : Devices.Resolve(DeviceKind.Output, dev.OutputDeviceId);
+        if (_output is null || _outStatus.Name != outDevice?.FriendlyName || _outStatus.State != SourceState.Running)
+        {
+            _output?.Dispose(); _output = null;
+            if (outDevice is null)
+                SetOutput(new(SourceState.Unavailable, null, "No virtual audio cable found. Install VB-Audio Virtual Cable or pick an output."));
+            else
+            {
+                try
+                {
+                    _output = OutputDevice.Start(outDevice, Mixer);
+                    _output.Stopped += ex => { if (ex is not null) { SetOutput(new(SourceState.Failed, _outStatus.Name, ex.Message)); ScheduleRecovery("output failed", 1000); } };
+                    SetOutput(new(SourceState.Running, outDevice.FriendlyName));
+                }
+                catch (Exception ex)
+                {
+                    Log.Error("Output start failed", ex);
+                    SetOutput(new(SourceState.Failed, outDevice.FriendlyName, ex.Message));
+                }
+            }
+        }
+        outDevice?.Dispose();
+
+        // Microphone.
+        using (var micDevice = Devices.Resolve(DeviceKind.Input, dev.InputDeviceId))
+        {
+            if (!dev.MicEnabled)
+            {
+                StopMic(new(SourceState.Off, null));
+            }
+            else if (micDevice is null)
+            {
+                StopMic(new(SourceState.Unavailable, null, "Microphone not found"));
+            }
+            else if (DeviceService.IsFeedbackLoop(micDevice.FriendlyName, _outStatus.Name))
+            {
+                StopMic(new(SourceState.Failed, micDevice.FriendlyName, "Feedback loop: the input is the virtual cable itself. Pick your real microphone."));
+            }
+            else if (_mic is null || _micStatus.Name != micDevice.FriendlyName || _micStatus.State != SourceState.Running)
+            {
+                StopMic(new(SourceState.Starting, micDevice.FriendlyName));
+                try
+                {
+                    var src = CaptureSource.StartDevice(micDevice);
+                    src.Stopped += ex => { if (ex is not null) { SetMic(new(SourceState.Failed, src.Name, ex.Message)); ScheduleRecovery("mic failed", 1000); } };
+                    _mic = src;
+                    Mixer.MicSource = src;
+                    SetMic(new(SourceState.Running, micDevice.FriendlyName));
+                }
+                catch (Exception ex)
+                {
+                    Log.Error("Mic start failed", ex);
+                    SetMic(new(SourceState.Failed, micDevice.FriendlyName, ex.Message));
+                }
+            }
+        }
+
+        // App audio (process loopback).
+        if (dev.AppSource is not { ProcessName.Length: > 0 } sel)
+        {
+            StopApp(new(SourceState.Off, null));
+        }
+        else
+        {
+            var app = AudioAppEnumerator.Find(AudioAppEnumerator.List(Devices), sel.ProcessName);
+            var label = app is null ? sel.ProcessName : $"{app.ProcessName} ({app.WindowTitle})";
+            if (app is null)
+            {
+                StopApp(new(SourceState.Unavailable, sel.ProcessName, $"{sel.ProcessName} isn't running"));
+            }
+            else if (_app is null || _appStatus.Name != label || _appStatus.State != SourceState.Running)
+            {
+                StopApp(new(SourceState.Starting, label));
+                try
+                {
+                    var src = await CaptureSource.StartProcessAsync(app.ProcessId, label).ConfigureAwait(false);
+                    src.Stopped += ex => { SetApp(new(SourceState.Unavailable, label, ex?.Message ?? "App stopped")); ScheduleRecovery("app capture stopped", 2000); };
+                    _app = src;
+                    Mixer.AppSource = src;
+                    SetApp(new(SourceState.Running, label));
+                }
+                catch (Exception ex)
+                {
+                    Log.Error($"App capture failed for {label}", ex);
+                    SetApp(new(SourceState.Failed, label, ex.Message));
+                }
+            }
+        }
+
+        // Monitor (your headphones).
+        if (!dev.MonitorEnabled)
+        {
+            StopMonitor(new(SourceState.Off, null));
+        }
+        else
+        {
+            using var monDevice = Devices.Resolve(DeviceKind.Output, dev.MonitorDeviceId);
+            if (monDevice is null) StopMonitor(new(SourceState.Unavailable, null, "Monitor device not found"));
+            else if (monDevice.FriendlyName == _outStatus.Name) StopMonitor(new(SourceState.Failed, monDevice.FriendlyName, "Monitor can't be the virtual mic output"));
+            else if (_monitor is null || _monStatus.Name != monDevice.FriendlyName || _monStatus.State != SourceState.Running)
+            {
+                StopMonitor(new(SourceState.Starting, monDevice.FriendlyName));
+                try
+                {
+                    var ring = new FloatRingBuffer(AudioFormat.SamplesFor(500));
+                    _monitor = OutputDevice.Start(monDevice, new RingBufferSampleProvider(ring));
+                    _monitor.Stopped += ex => { if (ex is not null) ScheduleRecovery("monitor failed", 1000); };
+                    Mixer.MonitorOut = ring;
+                    SetMonitor(new(SourceState.Running, monDevice.FriendlyName));
+                }
+                catch (Exception ex)
+                {
+                    Log.Error("Monitor start failed", ex);
+                    SetMonitor(new(SourceState.Failed, monDevice.FriendlyName, ex.Message));
+                }
+            }
+        }
+    }
+
+    private void StopMic(SourceStatus status)
+    {
+        Mixer.MicSource = null;
+        _mic?.Dispose(); _mic = null;
+        SetMic(status);
+    }
+
+    private void StopApp(SourceStatus status)
+    {
+        Mixer.AppSource = null;
+        _app?.Dispose(); _app = null;
+        SetApp(status);
+    }
+
+    private void StopMonitor(SourceStatus status)
+    {
+        Mixer.MonitorOut = null;
+        _monitor?.Dispose(); _monitor = null;
+        SetMonitor(status);
+    }
+
+    /// <summary>Re-runs the rebuild after a delay, coalescing bursts of failures/notifications.</summary>
+    private void ScheduleRecovery(string reason, int delayMs)
+    {
+        if (_life.IsCancellationRequested || Interlocked.Exchange(ref _retryPending, 1) == 1) return;
+        Log.Info($"Recovery scheduled ({reason})");
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await Task.Delay(delayMs, _life.Token).ConfigureAwait(false);
+                Interlocked.Exchange(ref _retryPending, 0);
+                await _lock.WaitAsync(_life.Token).ConfigureAwait(false);
+                try { await RebuildAsync().ConfigureAwait(false); }
+                finally { _lock.Release(); }
+            }
+            catch (OperationCanceledException) { }
+            catch (Exception ex) { Log.Error("Recovery failed", ex); }
+        });
+    }
+
+    private void SetMic(SourceStatus s) { _micStatus = s; Raise(); }
+    private void SetApp(SourceStatus s) { _appStatus = s; Raise(); }
+    private void SetOutput(SourceStatus s) { _outStatus = s; Raise(); }
+    private void SetMonitor(SourceStatus s) { _monStatus = s; Raise(); }
+    private void Raise() => StatusChanged?.Invoke(Status);
+
+    public async ValueTask DisposeAsync()
+    {
+        await _life.CancelAsync().ConfigureAwait(false);
+        await _lock.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            StopApp(new(SourceState.Off, null));
+            StopMic(new(SourceState.Off, null));
+            StopMonitor(new(SourceState.Off, null));
+            _output?.Dispose(); _output = null;
+            Devices.Dispose();
+        }
+        finally { _lock.Release(); }
+        _lock.Dispose();
+        _life.Dispose();
+    }
+}

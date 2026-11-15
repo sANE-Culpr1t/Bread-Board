@@ -22,7 +22,7 @@ public sealed class SoundEntry
 
 public sealed class ChannelSettings
 {
-    public int Gain { get; set; } = 80; // 0–100
+    public int Gain { get; set; } = 80; // 0–200 (above 100 = boost, useful for quiet mics)
     public bool Muted { get; set; }
     public bool ToVirtualMic { get; set; } = true;
     public bool ToMonitor { get; set; }
@@ -52,7 +52,7 @@ public sealed class PushToTalkSettings
 public sealed class ProcessingSettings
 {
     /// <summary>Threshold as % of full scale.</summary>
-    public ToggleWithValue NoiseGate { get; set; } = new() { Enabled = true, Value = 4 };
+    public ToggleWithValue NoiseGate { get; set; } = new() { Enabled = true, Value = 1 };
     /// <summary>Amount 0–100.</summary>
     public ToggleWithValue Compressor { get; set; } = new() { Enabled = false, Value = 40 };
     /// <summary>Ceiling as % of full scale.</summary>

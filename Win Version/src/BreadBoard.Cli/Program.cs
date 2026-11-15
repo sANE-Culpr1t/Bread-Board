@@ -8,6 +8,8 @@
 using BreadBoard.Audio;
 using BreadBoard.Audio.Devices;
 using BreadBoard.Audio.Import;
+using BreadBoard.Audio.Input;
+using BreadBoard.Core.Hotkeys;
 using BreadBoard.Audio.Soundboard;
 using BreadBoard.Audio.Sources;
 using BreadBoard.Core;
@@ -132,30 +134,66 @@ async Task<int> Run()
     }
     await host.StartAsync(cfg);
     PrintStatus(host.Status);
-    Console.WriteLine("\nKeys: 1-9 play sounds · s stop all · m mute mic · v toggle virtual mic · q quit\n");
-
-    var sounds = cfg.Sounds.Take(9).ToList();
-    for (var i = 0; i < sounds.Count; i++) Console.WriteLine($"  {i + 1}  {sounds[i].Name}  ({sounds[i].Mode})");
-    Console.WriteLine();
-
     if (Console.IsInputRedirected)
     {
         Console.WriteLine("'run' needs an interactive console. Use 'bb probe' for a non-interactive check.");
         return 1;
     }
+
+    // Global hotkeys: work while Discord or a game has focus.
+    using var hotkeys = new GlobalHotkeyService();
+    var sounds = cfg.Sounds.Take(9).ToList();
+    Console.WriteLine("\nGlobal hotkeys (work in any app):");
+    for (var i = 0; i < sounds.Count; i++)
+    {
+        var s = sounds[i];
+        var combo = s.Hotkey ?? $"Num{i + 1}";
+        var id = s.Id;
+        string? err = Hotkey.TryParse(combo, out var hk)
+            ? await hotkeys.RegisterAsync(hk, () => host.Soundboard.Trigger(id, true), s.Mode == PlayMode.Hold ? () => host.Soundboard.Trigger(id, false) : null)
+            : "invalid";
+        Console.WriteLine($"  {combo,-14} {s.Name} ({s.Mode}){(err is null ? "" : $"  !! {err}")}");
+    }
+    async Task Global(string? combo, string label, Action action)
+    {
+        if (!Hotkey.TryParse(combo, out var hk)) return;
+        var err = await hotkeys.RegisterAsync(hk, action);
+        Console.WriteLine($"  {hk,-14} {label}{(err is null ? "" : $"  !! {err}")}");
+    }
+    await Global(cfg.Hotkeys.StopAll, "Stop all sounds", host.Soundboard.StopAll);
+    await Global(cfg.Hotkeys.MuteMic, "Mute / unmute mic", () => { cfg.Channels.Mic.Muted = !cfg.Channels.Mic.Muted; host.ApplyMixSettings(cfg); });
+
+    Console.WriteLine("""
+
+        Keys in this window: 1-9 play · s stop · m mute mic · v virtual mic on/off · q quit
+                             g gate on/off · [ ] gate threshold · - + mic gain
+        """);
+
     while (true)
     {
         while (Console.KeyAvailable)
         {
-            var key = Console.ReadKey(intercept: true).KeyChar;
-            if (key == 'q') { Console.WriteLine(); store.Save(cfg); return 0; }
-            if (key == 's') host.Soundboard.StopAll();
-            if (key == 'm') { cfg.Channels.Mic.Muted = !cfg.Channels.Mic.Muted; host.ApplyMixSettings(cfg); }
-            if (key == 'v') { cfg.Devices.VirtualMicEnabled = !cfg.Devices.VirtualMicEnabled; host.ApplyMixSettings(cfg); }
-            if (key is >= '1' and <= '9' && key - '1' < sounds.Count) host.Soundboard.Trigger(sounds[key - '1'].Id);
+            var k = Console.ReadKey(intercept: true);
+            var key = k.KeyChar;
+            var digit = key is >= '1' and <= '9' ? key - '1' : k.Key is >= ConsoleKey.NumPad1 and <= ConsoleKey.NumPad9 ? k.Key - ConsoleKey.NumPad1 : -1;
+            var g = cfg.Processing.NoiseGate;
+            if (key == 'q') { Console.WriteLine(); store.Save(cfg); Console.WriteLine("Settings saved."); return 0; }
+            else if (key == 's') host.Soundboard.StopAll();
+            else if (key == 'm') cfg.Channels.Mic.Muted = !cfg.Channels.Mic.Muted;
+            else if (key == 'v') cfg.Devices.VirtualMicEnabled = !cfg.Devices.VirtualMicEnabled;
+            else if (key == 'g') g.Enabled = !g.Enabled;
+            else if (key == '[') g.Value = Math.Max(0, g.Value - 1);
+            else if (key == ']') g.Value = Math.Min(50, g.Value + 1);
+            else if (key is '-' or '_') cfg.Channels.Mic.Gain = Math.Max(0, cfg.Channels.Mic.Gain - 10);
+            else if (key is '+' or '=') cfg.Channels.Mic.Gain = Math.Min(200, cfg.Channels.Mic.Gain + 10);
+            else if (digit >= 0 && digit < sounds.Count) host.Soundboard.Trigger(sounds[digit].Id);
+            host.ApplyMixSettings(cfg);
         }
         var l = host.Mixer.TakeLevels();
-        Console.Write($"\rmic {Bar(l.Mic)}  app {Bar(l.App)}  board {Bar(l.Soundboard)}  out {Bar(l.Master)}{(cfg.Channels.Mic.Muted ? " [mic muted]" : "")}   ");
+        var gate = cfg.Processing.NoiseGate.Enabled ? $"gate {cfg.Processing.NoiseGate.Value}%" : "gate off";
+        var line = $"mic {Bar(l.Mic)} app {Bar(l.App)} sb {Bar(l.Soundboard)} out {Bar(l.Master)} | mic {cfg.Channels.Mic.Gain}% {gate}{(cfg.Channels.Mic.Muted ? " MUTED" : "")}{(cfg.Devices.VirtualMicEnabled ? "" : " VMIC OFF")}";
+        var width = Math.Max(20, Console.WindowWidth - 1); // never wrap, or \r can't redraw in place
+        Console.Write("\r" + (line.Length > width ? line[..width] : line.PadRight(width)));
         await Task.Delay(50);
     }
 }
@@ -286,9 +324,11 @@ string? Arg(string name)
     return i >= 0 && i + 1 < args.Length ? args[i + 1] : null;
 }
 
+/// <summary>dB-scaled meter, -60 dB … 0 dB, so quiet microphones still show movement.</summary>
 static string Bar(float level)
 {
-    var n = (int)Math.Round(Math.Clamp(level, 0, 1) * 10);
+    var db = level <= 1e-6f ? -60 : 20 * Math.Log10(level);
+    var n = (int)Math.Round(Math.Clamp((db + 60) / 60, 0, 1) * 10);
     return new string('#', n) + new string('.', 10 - n);
 }
 

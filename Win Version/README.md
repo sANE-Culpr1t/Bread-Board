@@ -77,6 +77,11 @@ through volatile fields and a command queue; live inputs are held ~40 ms behind 
 - `bb download <myinstants link>`: file found, downloaded and decoded.
 - `dotnet test`: 32 passing.
 
-Not yet built: WPF UI, global hotkeys (RegisterHotKey + hold-key hook), mini-player window, profiles UI.
-Not yet tested: Discord / Valorant / OBS selecting CABLE Output (needs a manual check), mic speech level
-with the 4 % noise-gate default, long-running stability.
+Global hotkeys: `Input/GlobalHotkeyService` (RegisterHotKey on its own message thread; hold-to-play watches the
+key only while it is held). `bb run` binds each sound's hotkey, or Num1–Num9 by default, plus Stop all / Mute mic.
+
+Tip: set VB-Cable to 48 kHz (Sound settings → "CABLE Input"/"Speakers (VB-Audio…)" and "CABLE Output" →
+Properties → Advanced → 2 channel, 24 bit, 48000 Hz). At other rates Bread Board resamples, which costs a little quality.
+
+Not yet built: WPF UI, mini-player window, profiles UI.
+Not yet tested: Discord / Valorant / OBS end to end (in progress), long-running stability.

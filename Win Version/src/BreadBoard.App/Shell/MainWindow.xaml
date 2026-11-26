@@ -71,20 +71,6 @@
                             </ToggleButton.Template>
                         </ToggleButton>
 
-                        <Border x:Name="VmCard" Style="{StaticResource FlatCard}" Padding="14,12" CornerRadius="14">
-                            <DockPanel>
-                                <CheckBox x:Name="VmSwitch" DockPanel.Dock="Right" Style="{StaticResource Switch}" VerticalAlignment="Center"
-                                          ToolTip="Virtual mic on/off (off sends silence)" AutomationProperties.Name="Virtual mic on"/>
-                                <StackPanel x:Name="VmText" VerticalAlignment="Center">
-                                    <StackPanel Orientation="Horizontal">
-                                        <Ellipse x:Name="VmDot" Width="9" Height="9" Fill="{StaticResource MuteBrush}" Margin="0,0,8,0"/>
-                                        <TextBlock Text="Virtual Mic" FontWeight="SemiBold" FontSize="13"/>
-                                    </StackPanel>
-                                    <TextBlock x:Name="VmStatus" Text="Not connected" Margin="17,1,0,0" FontSize="12" Foreground="{StaticResource MuteBrush}" TextTrimming="CharacterEllipsis"/>
-                                </StackPanel>
-                            </DockPanel>
-                        </Border>
-
                         <TextBlock x:Name="Footer" Margin="0,14,0,0" HorizontalAlignment="Center" FontSize="11" Foreground="{StaticResource MuteBrush}"/>
                     </StackPanel>
                 </DockPanel>

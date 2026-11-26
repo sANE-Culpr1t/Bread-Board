@@ -43,7 +43,6 @@ public sealed class MixerEngine : ISampleProvider
     public ChannelRouting MicRouting { get; } = new() { ToMain = true };
     public ChannelRouting AppRouting { get; } = new() { ToMain = true };
     public ChannelRouting BoardRouting { get; } = new() { ToMain = true, ToMonitor = true };
-    public ChannelRouting MasterRouting { get; } = new() { ToMain = true };
 
     public NoiseGate Gate { get; } = new();
     public Compressor MicCompressor { get; } = new();
@@ -105,7 +104,6 @@ public sealed class MixerEngine : ISampleProvider
             mon.Write(m);
         }
 
-        if (!MasterRouting.ToMain) output.Clear(); // virtual mic switched off: send silence, keep meters alive
         return count;
     }
 

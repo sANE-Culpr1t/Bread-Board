@@ -163,7 +163,7 @@ async Task<int> Run()
 
     Console.WriteLine("""
 
-        Keys in this window: 1-9 play · s stop · m mute mic · v virtual mic on/off · q quit
+        Keys in this window: 1-9 play · s stop · m mute mic · q quit
                              g gate on/off · [ ] gate threshold · - + mic gain
         """);
 
@@ -178,7 +178,6 @@ async Task<int> Run()
             if (key == 'q') { Console.WriteLine(); store.Save(cfg); Console.WriteLine("Settings saved."); return 0; }
             else if (key == 's') host.Soundboard.StopAll();
             else if (key == 'm') cfg.Channels.Mic.Muted = !cfg.Channels.Mic.Muted;
-            else if (key == 'v') cfg.Devices.VirtualMicEnabled = !cfg.Devices.VirtualMicEnabled;
             else if (key == 'g') g.Enabled = !g.Enabled;
             else if (key == '[') g.Value = Math.Max(0, g.Value - 1);
             else if (key == ']') g.Value = Math.Min(50, g.Value + 1);
@@ -189,7 +188,7 @@ async Task<int> Run()
         }
         var l = host.Mixer.TakeLevels();
         var gate = cfg.Processing.NoiseGate.Enabled ? $"gate {cfg.Processing.NoiseGate.Value}%" : "gate off";
-        var line = $"mic {Bar(l.Mic)} app {Bar(l.App)} sb {Bar(l.Soundboard)} out {Bar(l.Master)} | mic {cfg.Channels.Mic.Gain}% {gate}{(cfg.Channels.Mic.Muted ? " MUTED" : "")}{(cfg.Devices.VirtualMicEnabled ? "" : " VMIC OFF")}";
+        var line = $"mic {Bar(l.Mic)} app {Bar(l.App)} sb {Bar(l.Soundboard)} out {Bar(l.Master)} | mic {cfg.Channels.Mic.Gain}% {gate}{(cfg.Channels.Mic.Muted ? " MUTED" : "")}";
         var width = Math.Max(20, Console.WindowWidth - 1); // never wrap, or \r can't redraw in place
         Console.Write("\r" + (line.Length > width ? line[..width] : line.PadRight(width)));
         await Task.Delay(50);
@@ -265,7 +264,7 @@ async Task<int> SelfTest()
     failures += Check("process loopback capture of a running app", Rms(selfCapture), 0.05);
 
     host.Soundboard.StopAll();
-    cfg.Devices.VirtualMicEnabled = false;
+    cfg.Channels.Master.Muted = true;
     host.ApplyMixSettings(cfg);
     host.Soundboard.Trigger("tone");
     await Task.Delay(400);
@@ -273,7 +272,7 @@ async Task<int> SelfTest()
     await Task.Delay(600);
     var muted = Rms(cableCapture);
     var silent = muted < 0.005;
-    Console.WriteLine($"{(silent ? "PASS" : "FAIL")}  virtual mic switch off sends silence (rms {muted:0.0000})");
+    Console.WriteLine($"{(silent ? "PASS" : "FAIL")}  master mute sends silence (rms {muted:0.0000})");
     failures += silent ? 0 : 1;
 
     Console.WriteLine(failures == 0 ? "\nAll checks passed." : $"\n{failures} check(s) failed. See {AppPaths.Logs}");

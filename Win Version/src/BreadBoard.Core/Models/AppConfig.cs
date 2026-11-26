@@ -87,10 +87,11 @@ public sealed class DeviceSettings
     public string? OutputDeviceId { get; set; }
     public string? MonitorDeviceId { get; set; }
     public bool MicEnabled { get; set; } = true;
-    public bool VirtualMicEnabled { get; set; } = true;
     /// <summary>Plays the monitor mix (by default your soundboard) on <see cref="MonitorDeviceId"/> so you hear it.</summary>
     public bool MonitorEnabled { get; set; } = true;
     public AppSourceSelection? AppSource { get; set; }
+    /// <summary>Windows' default microphone before Bread Board's mic replaced it; restored when switched back.</summary>
+    public string? WindowsMicBefore { get; set; }
     /// <summary>Audio buffer size in ms for outputs and captures: lower = less delay, higher = fewer dropouts.</summary>
     public int LatencyMs { get; set; } = DefaultLatencyMs;
 

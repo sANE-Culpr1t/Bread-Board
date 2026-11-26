@@ -38,7 +38,6 @@ public static class ProfileService
             Processing = copy.Processing,
             Hotkeys = copy.Hotkeys,
             MicEnabled = c.Devices.MicEnabled,
-            VirtualMicEnabled = c.Devices.VirtualMicEnabled,
             MonitorEnabled = c.Devices.MonitorEnabled,
             AppSource = copy.Devices.AppSource,
             SoundHotkeys = c.Sounds.ToDictionary(s => s.Id, s => s.Hotkey),
@@ -54,7 +53,6 @@ public static class ProfileService
         c.Processing = copy.Processing;
         c.Hotkeys = copy.Hotkeys;
         c.Devices.MicEnabled = p.MicEnabled;
-        c.Devices.VirtualMicEnabled = p.VirtualMicEnabled;
         c.Devices.MonitorEnabled = p.MonitorEnabled;
         c.Devices.AppSource = copy.AppSource;
         foreach (var s in c.Sounds)

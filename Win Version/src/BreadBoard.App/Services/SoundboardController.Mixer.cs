@@ -88,14 +88,6 @@ public sealed partial class SoundboardController
 
     public void ToggleMasterMute() => SetChannel(MixChannel.Master, muted: !Config.Channels.Master.Muted);
 
-    /// <summary>Turns the virtual mic on/off (off = silence is sent, meters keep working).</summary>
-    public void SetVirtualMic(bool on)
-    {
-        _config.Update(c => c.Devices.VirtualMicEnabled = on);
-        ApplyMix();
-        MixChanged?.Invoke();
-    }
-
     /// <summary>Device choices, mic/monitor on-off and buffer size: reopens only what changed.</summary>
     public async Task SetDevicesAsync(Action<DeviceSettings> change)
     {
@@ -105,6 +97,63 @@ public sealed partial class SoundboardController
 
     /// <summary>No virtual audio cable is installed, so nothing can hear Bread Board as a microphone.</summary>
     public bool VirtualCableMissing => !_disposed && _audio.IsValueCreated && !ListDevices(DeviceKind.Output).Any(d => d.IsVirtualCable);
+
+    /// <summary>Windows' default microphone is Bread Board's (the virtual cable), so apps on "Default" hear Bread Board.</summary>
+    public bool BreadBoardIsWindowsMic
+    {
+        get
+        {
+            if (_disposed || !_audio.IsValueCreated) return false;
+            try
+            {
+                var cable = _audio.Value.Devices.FindVirtualCableInput();
+                return cable is not null && cable.Id == _audio.Value.Devices.DefaultId(DeviceKind.Input);
+            }
+            catch (System.Runtime.InteropServices.COMException) { return false; }
+        }
+    }
+
+    /// <summary>
+    /// Makes Bread Board's mic Windows' default microphone, or gives the default back to the one it replaced.
+    /// Bread Board keeps listening to your real mic either way (it never records its own output).
+    /// </summary>
+    public async Task UseAsWindowsMicAsync(bool on)
+    {
+        await EnsureEngineAsync();
+        var devices = _audio.Value.Devices;
+        try
+        {
+            if (on)
+            {
+                if (devices.FindVirtualCableInput() is not { } cable) { Notice?.Invoke("Install VB-CABLE first (Mixer › Set up the virtual mic).", true); return; }
+                var before = devices.DefaultId(DeviceKind.Input);
+                if (before == cable.Id) return;
+                _config.Update(c =>
+                {
+                    c.Devices.WindowsMicBefore = before;
+                    c.Devices.InputDeviceId ??= before; // "system default" would now be Bread Board itself
+                });
+                DeviceService.SetDefaultInput(cable.Id);
+                Notice?.Invoke("Apps using the default microphone now hear Bread Board.", false);
+            }
+            else
+            {
+                var real = devices.GetDevices(DeviceKind.Input).Where(d => !d.IsVirtualCable).ToList();
+                var back = real.Find(d => d.Id == Config.Devices.WindowsMicBefore) ?? real.Find(d => d.Id == Config.Devices.InputDeviceId) ?? real.FirstOrDefault();
+                if (back is null) { Notice?.Invoke("No other microphone to switch back to.", true); return; }
+                DeviceService.SetDefaultInput(back.Id);
+                _config.Update(c => c.Devices.WindowsMicBefore = null);
+                Notice?.Invoke($"Windows' default microphone is {back.Name} again.", false);
+            }
+        }
+        catch (Exception ex) when (ex is System.Runtime.InteropServices.COMException or InvalidCastException)
+        {
+            Log.Warn("Changing the Windows default microphone failed", ex);
+            Notice?.Invoke("Windows didn't allow changing the default microphone. Set it in Sound settings › Input instead.", true);
+        }
+        await RestartAudioAsync();
+        MixChanged?.Invoke();
+    }
 
     public IReadOnlyList<AudioDeviceInfo> ListDevices(DeviceKind kind)
     {

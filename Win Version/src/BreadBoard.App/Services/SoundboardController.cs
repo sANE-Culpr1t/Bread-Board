@@ -156,7 +156,7 @@ public sealed partial class SoundboardController : IDisposable
         UpdateTicking();
         EngineChanged?.Invoke();
 
-        static string Name(string? name) => name is null ? "?" : DeviceService.IsVirtualCable(name) ? "virtual cable" : name;
+        static string Name(string? name) => name is null ? "?" : DeviceService.IsVirtualCable(name) ? "Bread Board mic" : name;
     }
 
     private async Task LoadAsync(SoundItem item)

@@ -66,7 +66,6 @@ public partial class MainWindow : Window
         sb.Notice += ShowToast;
         sb.EngineChanged += UpdateEngineStatus;
         sb.MixChanged += UpdateEngineStatus;
-        PageKit.OnToggle(VmSwitch, () => sb.Config.Devices.VirtualMicEnabled, sb.SetVirtualMic);
         StateChanged += (_, _) => sb.MetersVisible = WindowState != WindowState.Minimized;
         sb.PlaybackTick += () =>
         {
@@ -114,14 +113,8 @@ public partial class MainWindow : Window
         };
         EngineDetail.Text = sb.EngineSummary;
         EngineDetail.ToolTip = sb.EngineSummary;
-        var vmOn = sb.Config.Devices.VirtualMicEnabled;
-        VmSwitch.IsChecked = vmOn;
-        var live = sb.Engine == EngineState.Live;
-        VmDot.Fill = (System.Windows.Media.Brush)FindResource(!vmOn ? "MuteBrush" : live ? "OkBrush" : "BadBrush");
-        VmStatus.Text = !vmOn ? "Off (sending silence)" : live ? "Live" : sb.VirtualCableMissing ? "Not set up: see Mixer" : sb.EngineStarted ? "Not connected" : "Starting…";
         MicMeterLabel.Text = sb.Config.Channels.Mic.Muted ? "Microphone (muted)" : sb.Config.Devices.MicEnabled ? "Microphone" : "Microphone (off)";
         MasterMeterLabel.Text = sb.Config.Channels.Master.Muted ? "Master (muted)" : "Master";
-        VmCard.ToolTip = sb.EngineSummary;
         var app = sb.Status.App;
         AppMeterLabel.Text = app.State == Audio.SourceState.Running ? $"App · {app.Name}" : "App audio";
         AppMeterBox.ToolTip = sb.Config.Devices.AppSource is null ? "Choose an app on the Mixer page"
@@ -201,7 +194,6 @@ public partial class MainWindow : Window
         LogoSpot.Width = LogoSpot.Height = compact ? 44 : 92;
         foreach (var l in _navLabels) l.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
         GamingButton.Tag = compact ? "compact" : null;
-        VmText.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
         Footer.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
     }
 

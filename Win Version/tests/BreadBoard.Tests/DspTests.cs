@@ -62,8 +62,8 @@ public class DspTests
         Assert.Equal(0f, buf[^1], 3);
 
         mix.BoardRouting.ToMain = true;
-        mix.MasterRouting.ToMain = false; // virtual mic off
-        mix.Read(buf);
+        mix.Master.Muted = true;
+        mix.Read(buf); mix.Read(buf); // the first block ramps down
         Assert.All(buf, v => Assert.Equal(0f, v));
     }
 

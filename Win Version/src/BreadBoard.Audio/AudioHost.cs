@@ -81,8 +81,8 @@ public sealed class AudioHost : IAsyncDisposable
         Apply(Mixer.Board, Mixer.BoardRouting, c.Channels.Soundboard);
         Mixer.BoardMonitor.Gain = c.Channels.Soundboard.Gain / 100f;
         Mixer.BoardMonitor.Muted = c.Channels.Soundboard.Muted;
-        Apply(Mixer.Master, Mixer.MasterRouting, c.Channels.Master);
-        Mixer.MasterRouting.ToMain = c.Devices.VirtualMicEnabled;
+        Mixer.Master.Gain = c.Channels.Master.Gain / 100f;
+        Mixer.Master.Muted = c.Channels.Master.Muted;
 
         var p = c.Processing;
         Mixer.Gate.Enabled = p.NoiseGate.Enabled;

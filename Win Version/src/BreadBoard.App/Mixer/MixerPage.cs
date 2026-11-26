@@ -28,8 +28,9 @@ public sealed class MixerPage : UserControl
     {
         _sb = sb;
         var root = new StackPanel();
-        root.Children.Add(Header("Mixer", "Your microphone, an app of your choice and the soundboard, mixed into one virtual microphone."));
+        root.Children.Add(Header("Mixer", "Your microphone, an app of your choice and the soundboard, mixed into the Bread Board mic."));
         root.Children.Add(CableSetupCard());
+        root.Children.Add(DevicesCard());
 
         var strips = new UniformGrid { Rows = 1, Margin = new Thickness(0, 4, 0, 0) };
         strips.Children.Add(Strip(MixChannel.Mic, "Microphone", Glyph.Mic, MicSlot()));
@@ -45,9 +46,6 @@ public sealed class MixerPage : UserControl
         proc.Children.Add(ProcessorCard(Processor.Limiter, "Limiter", "Ceiling on the virtual mic: no clipping", 50, 100, "%"));
         proc.Children.Add(ProcessorCard(Processor.Ducking, "Voice ducking", "Lowers app audio while you talk", 0, 100, "%"));
         root.Children.Add(proc);
-
-        root.Children.Add(SectionTitle("Devices"));
-        root.Children.Add(DevicesCard());
 
         Content = Scroll(root);
         _sb.EngineChanged += RefreshAll;
@@ -122,9 +120,9 @@ public sealed class MixerPage : UserControl
         CheckBox? toMic = null, toMon = null;
         if (ch != MixChannel.Master)
         {
-            toMic = Switch(s.ToVirtualMic, true, "Send this channel to the virtual mic (what others hear)");
+            toMic = Switch(s.ToVirtualMic, true, "Send this channel to the Bread Board mic (what others hear)");
             OnToggle(toMic, () => SoundboardController.Settings(_sb.Config, ch).ToVirtualMic, on => _sb.SetChannel(ch, toVirtualMic: on));
-            routing.Children.Add(RoutingRow("To virtual mic", toMic));
+            routing.Children.Add(RoutingRow("To Bread Board mic", toMic));
             var canMonitor = SoundboardController.CanMonitor(ch);
             toMon = canMonitor
                 ? Switch(s.ToMonitor, true, ch == MixChannel.Mic ? "Hear your own voice in your headphones" : "Hear your sounds in your headphones")
@@ -134,7 +132,7 @@ public sealed class MixerPage : UserControl
         }
         else
         {
-            routing.Children.Add(Text("Limiter and the virtual-mic switch apply here.", 12, muted: true));
+            routing.Children.Add(Text("The limiter applies here.", 12, muted: true));
         }
         p.Children.Add(routing);
 
@@ -193,9 +191,8 @@ public sealed class MixerPage : UserControl
                 var n = _sb.Items.Count;
                 return (n == 0 ? "No sounds yet" : $"{n} sound{(n == 1 ? "" : "s")}", n == 0 ? "MuteBrush" : "OkBrush");
             default:
-                if (!_sb.Config.Devices.VirtualMicEnabled) return ("Virtual mic off (sending silence)", "Accent2Brush");
-                return st.Output.State == SourceState.Running ? ("Live on the virtual mic", "OkBrush")
-                    : (st.Output.Error ?? "No virtual mic output", "BadBrush");
+                return st.Output.State == SourceState.Running ? ("Live on the Bread Board mic", "OkBrush")
+                    : (st.Output.Error ?? "No Bread Board mic", "BadBrush");
         }
     }
 
@@ -225,13 +222,14 @@ public sealed class MixerPage : UserControl
         return SwitchRow("Push-to-talk", ptt);
     }
 
-    private DockPanel MasterSlot()
+    private TextBlock MasterSlot()
     {
-        var vm = Switch(_sb.Config.Devices.VirtualMicEnabled, true, "Off sends silence to the virtual mic (meters keep working)");
-        System.Windows.Automation.AutomationProperties.SetName(vm, "Virtual mic on");
-        OnToggle(vm, () => _sb.Config.Devices.VirtualMicEnabled, _sb.SetVirtualMic);
-        _refreshers.Add(() => vm.IsChecked = _sb.Config.Devices.VirtualMicEnabled);
-        return SwitchRow("Virtual mic on", vm);
+        var t = Text("", 13, muted: true);
+        t.Margin = new Thickness(4, 0, 0, 0);
+        t.TextTrimming = TextTrimming.CharacterEllipsis;
+        t.TextWrapping = TextWrapping.NoWrap;
+        _refreshers.Add(() => t.Text = _sb.Status.Output.State == SourceState.Running ? "Everything here goes to the Bread Board mic" : "Waiting for the Bread Board mic");
+        return t;
     }
 
     private Button BoardSlot()
@@ -350,26 +348,47 @@ public sealed class MixerPage : UserControl
         return card;
     }
 
+    /// <summary>Input (your real mic), output (the Bread Board mic others hear), monitor and buffer size.</summary>
     private Border DevicesCard()
     {
         var grid = new UniformGrid { Rows = 1 };
-        grid.Children.Add(DeviceColumn("Microphone", DeviceKind.Input, () => _sb.Config.Devices.InputDeviceId,
+        grid.Children.Add(DeviceColumn("Your microphone (input)", DeviceKind.Input, () => _sb.Config.Devices.InputDeviceId,
             id => _sb.SetDevicesAsync(d => d.InputDeviceId = id), "System default microphone",
             () => _sb.Config.Devices.MicEnabled, on => _sb.SetDevicesAsync(d => d.MicEnabled = on), "Use microphone",
-            () => _sb.Status.Mic, info => info.IsVirtualCable ? " (virtual cable: would echo)" : ""));
-        grid.Children.Add(DeviceColumn("Virtual mic output", DeviceKind.Output, () => _sb.Config.Devices.OutputDeviceId,
-            id => _sb.SetDevicesAsync(d => d.OutputDeviceId = id), "Auto: VB-Audio virtual cable",
-            null, null, null, () => _sb.Status.Output, info => info.IsVirtualCable ? " (recommended)" : ""));
+            () => _sb.Status.Mic, info => info.IsVirtualCable ? (info.Name + " (Bread Board's own mic: can't be the input)", false, false) : (info.Name, false, true)));
+        var output = DeviceColumn("Bread Board mic (what others hear)", DeviceKind.Output, () => _sb.Config.Devices.OutputDeviceId,
+            id => _sb.SetDevicesAsync(d => d.OutputDeviceId = id), "Auto: Bread Board mic",
+            null, null, null, () => _sb.Status.Output, info => info.IsVirtualCable ? ("Bread Board mic · " + info.Name, true, true) : (info.Name, false, true));
+        output.Children.Add(WindowsMicRow());
+        grid.Children.Add(output);
         grid.Children.Add(DeviceColumn("Monitor (your headphones)", DeviceKind.Output, () => _sb.Config.Devices.MonitorDeviceId,
             id => _sb.SetDevicesAsync(d => d.MonitorDeviceId = id), "System default speakers",
             () => _sb.Config.Devices.MonitorEnabled, on => _sb.SetDevicesAsync(d => d.MonitorEnabled = on), "Monitor on",
-            () => _sb.Status.Monitor, info => info.IsVirtualCable ? " (virtual cable: not useful)" : ""));
+            () => _sb.Status.Monitor, info => (info.Name, false, !info.IsVirtualCable)));
         grid.Children.Add(LatencyColumn());
-        return Card(grid, new Thickness(20, 16, 4, 18));
+        var card = Card(grid, new Thickness(20, 16, 4, 18));
+        card.Margin = new Thickness(0, 0, 14, 18);
+        return card;
+    }
+
+    /// <summary>Makes the Bread Board mic Windows' default microphone, so Discord and games on "Default" use it instead of your own.</summary>
+    private DockPanel WindowsMicRow()
+    {
+        var sw = Switch(false, true, "Apps set to the default microphone (Discord, games) hear Bread Board instead of your own mic. Off gives the default back to your mic.");
+        System.Windows.Automation.AutomationProperties.SetName(sw, "Use as Windows microphone");
+        OnToggle(sw, () => _sb.BreadBoardIsWindowsMic, async on => await _sb.UseAsWindowsMicAsync(on));
+        _refreshers.Add(() =>
+        {
+            sw.IsChecked = _sb.BreadBoardIsWindowsMic;
+            sw.IsEnabled = !_sb.VirtualCableMissing;
+        });
+        var row = RoutingRow("Use as Windows microphone", sw);
+        row.Margin = new Thickness(0, 8, 0, 0);
+        return row;
     }
 
     private StackPanel DeviceColumn(string label, DeviceKind kind, Func<string?> current, Func<string?, Task> choose, string defaultText,
-        Func<bool>? isOn, Func<bool, Task>? setOn, string? onLabel, Func<SourceStatus> status, Func<AudioDeviceInfo, string> note)
+        Func<bool>? isOn, Func<bool, Task>? setOn, string? onLabel, Func<SourceStatus> status, Func<AudioDeviceInfo, (string Text, bool BreadBoard, bool Usable)> describe)
     {
         var p = new StackPanel { Margin = new Thickness(0, 0, 16, 0) };
         var head = new DockPanel { Height = 30 }; // same height with or without a switch, so columns line up
@@ -406,7 +425,12 @@ public sealed class MixerPage : UserControl
             if (_deviceCache.TryGetValue(kind, out var cached)) devices = cached;
             else if (_sb.EngineStarted) devices = _deviceCache[kind] = _sb.ListDevices(kind);
             foreach (var d in devices)
-                box.Items.Add(new ComboBoxItem { Content = d.Name + note(d), Tag = d.Id });
+            {
+                var (text, breadBoard, usable) = describe(d);
+                var item = new ComboBoxItem { Content = text, Tag = d.Id, IsEnabled = usable };
+                if (breadBoard) { item.FontWeight = FontWeights.SemiBold; item.Foreground = Res("Accent2Brush"); }
+                box.Items.Add(item);
+            }
             var id = current();
             box.SelectedItem = box.Items.Cast<ComboBoxItem>().FirstOrDefault(i => (string?)i.Tag == id) ?? box.Items[0];
             box.IsEnabled = isOn?.Invoke() ?? true;

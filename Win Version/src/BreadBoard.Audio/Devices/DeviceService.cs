@@ -67,6 +67,20 @@ public sealed class DeviceService : IDisposable
     public AudioDeviceInfo? FindVirtualCableOutput() =>
         GetDevices(DeviceKind.Output).FirstOrDefault(d => d.IsVirtualCable);
 
+    /// <summary>The recording side of a virtual cable ("CABLE Output"): what Discord and games select to hear Bread Board.</summary>
+    public AudioDeviceInfo? FindVirtualCableInput() =>
+        GetDevices(DeviceKind.Input).FirstOrDefault(d => d.IsVirtualCable);
+
+    /// <summary>Windows' default device of this kind, or null when there is none.</summary>
+    public string? DefaultId(DeviceKind kind)
+    {
+        if (!_enumerator.TryGetDefaultAudioEndpoint(kind == DeviceKind.Input ? DataFlow.Capture : DataFlow.Render, Role.Communications, out var def)) return null;
+        using (def) return def.ID;
+    }
+
+    /// <summary>Makes <paramref name="inputId"/> Windows' default microphone for every app.</summary>
+    public static void SetDefaultInput(string inputId) => WindowsDefaultDevice.Set(inputId);
+
     public static bool IsVirtualCable(string name) =>
         name.Contains("CABLE", StringComparison.OrdinalIgnoreCase) || name.Contains("VB-Audio", StringComparison.OrdinalIgnoreCase);
 

@@ -49,7 +49,7 @@ public class MixerSettingsTests
         host.ApplyMixSettings(cfg);
         Assert.InRange(Level(), 0.3f, 0.5f);
 
-        cfg.Devices.VirtualMicEnabled = false;
+        cfg.Channels.Master.Muted = true;
         host.ApplyMixSettings(cfg);
         Assert.Equal(0f, Level());
 

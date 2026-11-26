@@ -118,7 +118,7 @@ public partial class MainWindow : Window
         VmSwitch.IsChecked = vmOn;
         var live = sb.Engine == EngineState.Live;
         VmDot.Fill = (System.Windows.Media.Brush)FindResource(!vmOn ? "MuteBrush" : live ? "OkBrush" : "BadBrush");
-        VmStatus.Text = !vmOn ? "Off (sending silence)" : live ? "Live" : sb.EngineStarted ? "Not connected" : "Starting…";
+        VmStatus.Text = !vmOn ? "Off (sending silence)" : live ? "Live" : sb.VirtualCableMissing ? "Not set up: see Mixer" : sb.EngineStarted ? "Not connected" : "Starting…";
         MicMeterLabel.Text = sb.Config.Channels.Mic.Muted ? "Microphone (muted)" : sb.Config.Devices.MicEnabled ? "Microphone" : "Microphone (off)";
         MasterMeterLabel.Text = sb.Config.Channels.Master.Muted ? "Master (muted)" : "Master";
         VmCard.ToolTip = sb.EngineSummary;

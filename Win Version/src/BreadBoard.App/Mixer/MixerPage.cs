@@ -29,6 +29,7 @@ public sealed class MixerPage : UserControl
         _sb = sb;
         var root = new StackPanel();
         root.Children.Add(Header("Mixer", "Your microphone, an app of your choice and the soundboard, mixed into one virtual microphone."));
+        root.Children.Add(CableSetupCard());
 
         var strips = new UniformGrid { Rows = 1, Margin = new Thickness(0, 4, 0, 0) };
         strips.Children.Add(Strip(MixChannel.Mic, "Microphone", Glyph.Mic, MicSlot()));
@@ -270,6 +271,41 @@ public sealed class MixerPage : UserControl
             pickIcon.Visibility = pickIcon.Source is null ? Visibility.Collapsed : Visibility.Visible;
         });
         return pick;
+    }
+
+    /// <summary>Shown while no virtual audio cable exists: without one, Discord and games can't hear Bread Board.</summary>
+    private Border CableSetupCard()
+    {
+        var p = new StackPanel();
+        p.Children.Add(Text("Set up the virtual mic", 16, weight: FontWeights.SemiBold));
+        p.Children.Add(Text("Discord and games hear Bread Board through VB-CABLE, a free virtual audio cable made by VB-Audio (donationware, vb-cable.com). Until it's installed, sounds and app audio only play in your headphones.", 13, muted: true));
+        var steps = Text("Install downloads VB-CABLE from vb-audio.com and opens its installer: allow the Windows prompt, click Install Driver, then restart your PC. Afterwards pick CABLE Output as the microphone in Discord or your game.", 13, muted: true);
+        steps.Margin = new Thickness(0, 6, 0, 0);
+        p.Children.Add(steps);
+        var install = PageKit.Button("Install VB-CABLE", "PrimaryButton");
+        var site = PageKit.Button("Open vb-cable.com", "GhostButton");
+        site.Margin = new Thickness(8, 0, 0, 0);
+        site.Click += (_, _) => VirtualCableSetup.OpenWebsite();
+        var status = Text("", 13, muted: true);
+        status.Margin = new Thickness(12, 0, 0, 0);
+        var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 12, 0, 0) };
+        row.Children.Add(install);
+        row.Children.Add(site);
+        row.Children.Add(status);
+        p.Children.Add(row);
+        install.Click += async (_, _) =>
+        {
+            install.IsEnabled = false;
+            var (result, message) = await VirtualCableSetup.InstallAsync(new Progress<string>(t => status.Text = t));
+            status.Text = message;
+            status.Foreground = Res(result == VirtualCableSetup.Result.Failed ? "BadBrush" : "MuteBrush");
+            install.IsEnabled = true;
+        };
+        var card = Card(p, new Thickness(20, 16, 20, 16));
+        card.Margin = new Thickness(0, 0, 14, 18);
+        card.BorderBrush = Res("Accent2Brush");
+        _refreshers.Add(() => card.Visibility = _sb.VirtualCableMissing ? Visibility.Visible : Visibility.Collapsed);
+        return card;
     }
 
     private Border ProcessorCard(Processor proc, string title, string desc, int min, int max, string unit)

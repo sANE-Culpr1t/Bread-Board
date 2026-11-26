@@ -103,6 +103,9 @@ public sealed partial class SoundboardController
         await RestartAudioAsync();
     }
 
+    /// <summary>No virtual audio cable is installed, so nothing can hear Bread Board as a microphone.</summary>
+    public bool VirtualCableMissing => !_disposed && _audio.IsValueCreated && !ListDevices(DeviceKind.Output).Any(d => d.IsVirtualCable);
+
     public IReadOnlyList<AudioDeviceInfo> ListDevices(DeviceKind kind)
     {
         if (_disposed) return [];

@@ -45,7 +45,10 @@ public sealed class SettingsPage : UserControl
         opacityRow.Children.Add(opacity);
         opacityRow.Children.Add(opacityText);
         gaming.Children.Add(Row("Mini-player opacity", "See through it to the game behind (40-100 %).", opacityRow));
-        gaming.Children.Add(Row("Mini-player", "A compact window for use while gaming.", open, last: true));
+        gaming.Children.Add(Row("Mini-player", "A compact window for use while gaming.", open));
+        var tray = Switch(ui.CloseToTray, true, "Closing the window keeps Bread Board in the tray; quit from the tray icon");
+        OnToggle(tray, () => config.Current.Ui.CloseToTray, on => config.Update(c => c.Ui.CloseToTray = on));
+        gaming.Children.Add(Row("Keep running in the tray when closed", "Shortcuts and the Bread Board mic keep working. Quit from the tray icon to close Bread Board and hide its mic.", tray, last: true));
         root.Children.Add(Card(gaming));
 
         root.Children.Add(SectionTitle("Playback"));

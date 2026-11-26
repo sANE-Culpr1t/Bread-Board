@@ -121,6 +121,46 @@ public static partial class AudioAppEnumerator
         }
     }
 
+    /// <summary>The app's own volume (its first sound session's), 0–1; null when it has no session.</summary>
+    public static float? GetVolume(Devices.DeviceService devices, string processName)
+    {
+        float? found = null;
+        ForEachSession(devices, processName, s => { found ??= s.SimpleAudioVolume.Volume; });
+        return found;
+    }
+
+    /// <summary>Sets the app's volume in every sound session it has (what you hear; Windows' Volume mixer shows the same).</summary>
+    public static void SetVolume(Devices.DeviceService devices, string processName, float level) =>
+        ForEachSession(devices, processName, s => s.SimpleAudioVolume.Volume = Math.Clamp(level, 0f, 1f));
+
+    private static void ForEachSession(Devices.DeviceService devices, string processName, Action<AudioSessionControl> action)
+    {
+        var name = AppSourceRules.BaseName(processName);
+        foreach (var dev in devices.Enumerator.EnumerateAudioEndPoints(DataFlow.Render, DeviceState.Active))
+        {
+            using (dev)
+            {
+                try
+                {
+                    var sessions = dev.AudioSessionManager.Sessions;
+                    for (var i = 0; i < sessions.Count; i++)
+                    {
+                        using var s = sessions[i];
+                        var pid = (int)s.GetProcessID;
+                        if (pid == 0) continue;
+                        try
+                        {
+                            using var p = Process.GetProcessById(pid);
+                            if (string.Equals(p.ProcessName, name, StringComparison.OrdinalIgnoreCase)) action(s);
+                        }
+                        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException) { } // exited meanwhile
+                    }
+                }
+                catch (COMException ex) { Log.Warn($"Could not read sessions on {dev.FriendlyName}", ex); }
+            }
+        }
+    }
+
     /// <summary>True if any process with this name is running (cheap; used while waiting for an app to start).</summary>
     public static bool IsRunning(string processName)
     {

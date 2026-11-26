@@ -15,6 +15,7 @@ using BreadBoard.App.Theme;
 
 namespace BreadBoard.App.Shell;
 
+[System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "CA1001", Justification = "The tray icon is disposed when the window really closes (OnClosing quit path); the window lives for the whole run.")]
 public partial class MainWindow : Window
 {
     private static readonly (PageId Id, string Label, string Glyph)[] Pages =
@@ -31,7 +32,8 @@ public partial class MainWindow : Window
     private readonly Dictionary<PageId, RadioButton> _navButtons = [];
     private readonly List<TextBlock> _navLabels = [];
     private MiniPlayerWindow? _mini;
-    private bool _closing;
+    private bool _closing, _quitting;
+    private readonly TrayIcon _tray;
 
     public MainWindow(AppHost host, Func<int, Task> exit)
     {
@@ -76,6 +78,8 @@ public partial class MainWindow : Window
         };
         sb.ToggleMiniRequested = () => { if (_mini is null) ShowMini(); else _mini.Close(); };
         Toast.MouseLeftButtonUp += (_, _) => HideToast();
+        _tray = new TrayIcon(_host.Config, sb, BringToFront, Quit);
+        IsVisibleChanged += (_, _) => sb.MetersVisible = IsVisible && WindowState != WindowState.Minimized;
         _toastTimer.Tick += (_, _) => HideToast();
     }
 
@@ -206,14 +210,30 @@ public partial class MainWindow : Window
         MaxButton.ToolTip = max ? "Restore" : "Maximize";
     }
 
+    /// <summary>Closes Bread Board completely (tray Quit), instead of hiding it in the tray.</summary>
+    public void Quit()
+    {
+        _quitting = true;
+        Close();
+    }
+
     protected override async void OnClosing(CancelEventArgs e)
     {
         base.OnClosing(e);
         if (_closing) return;
+        if (!_quitting && _host.Config.Current.Ui.CloseToTray && !_host.Options.IsAutomated)
+        {
+            e.Cancel = true; // keep running in the tray: shortcuts, the mini-player and the Bread Board mic stay live
+            SavePlacement();
+            Hide();
+            _tray.ShowStillRunningHint();
+            return;
+        }
         e.Cancel = true; // finish shutting down services first, then exit
         _closing = true;
         SavePlacement();
         _mini?.Close();
+        _tray.Dispose();
         await _exit(0);
     }
 

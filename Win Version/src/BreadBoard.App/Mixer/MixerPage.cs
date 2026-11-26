@@ -129,6 +129,8 @@ public sealed class MixerPage : UserControl
                 : Switch(false, false, "You already hear the app itself; monitoring it would play it twice.");
             if (canMonitor) OnToggle(toMon, () => SoundboardController.Settings(_sb.Config, ch).ToMonitor, on => _sb.SetChannel(ch, toMonitor: on));
             routing.Children.Add(RoutingRow("Monitor", toMon));
+            if (ch == MixChannel.App)
+                routing.Children.Add(LevelRow("Volume on this PC", "The app's own volume: what you hear (same as Windows' Volume mixer). The fader above sets what others hear.", () => _sb.AppVolume, _sb.SetAppVolume));
         }
         else
         {
@@ -194,6 +196,34 @@ public sealed class MixerPage : UserControl
                 return st.Output.State == SourceState.Running ? ("Live on the Bread Board mic", "OkBrush")
                     : (st.Output.Error ?? "No Bread Board mic", "BadBrush");
         }
+    }
+
+    /// <summary>A 0–100 % slider for a Windows volume; disabled while there is nothing to set (no app sound, no mic).</summary>
+    private StackPanel LevelRow(string label, string tooltip, Func<int?> get, Action<int> set)
+    {
+        var value = Text("", 12, muted: true);
+        var head = new DockPanel();
+        DockPanel.SetDock(value, Dock.Right);
+        head.Children.Add(value);
+        head.Children.Add(Text(label, 13, muted: true));
+        var slider = new Slider { Minimum = 0, Maximum = 100, IsSnapToTickEnabled = true, TickFrequency = 1, ToolTip = tooltip, Margin = new Thickness(0, 2, 0, 0) };
+        System.Windows.Automation.AutomationProperties.SetName(slider, label);
+        slider.ValueChanged += (_, _) =>
+        {
+            value.Text = $"{(int)slider.Value}%";
+            if (!_filling) set((int)slider.Value);
+        };
+        _refreshers.Add(() =>
+        {
+            var v = get();
+            slider.IsEnabled = v is not null;
+            slider.Value = v ?? 0;
+            value.Text = v is null ? "–" : $"{v}%";
+        });
+        var p = new StackPanel { Margin = new Thickness(0, 8, 0, 0), ToolTip = tooltip };
+        p.Children.Add(head);
+        p.Children.Add(slider);
+        return p;
     }
 
     private static DockPanel RoutingRow(string label, CheckBox sw)
@@ -353,13 +383,14 @@ public sealed class MixerPage : UserControl
     {
         var grid = new UniformGrid { Rows = 1 };
         grid.Children.Add(DeviceColumn("Your microphone (input)", DeviceKind.Input, () => _sb.Config.Devices.InputDeviceId,
-            id => _sb.SetDevicesAsync(d => d.InputDeviceId = id), "System default microphone",
+            id => _sb.SetDevicesAsync(d => d.InputDeviceId = id), "Default (your real mic)",
             () => _sb.Config.Devices.MicEnabled, on => _sb.SetDevicesAsync(d => d.MicEnabled = on), "Use microphone",
             () => _sb.Status.Mic, info => info.IsVirtualCable ? (info.Name + " (Bread Board's own mic: can't be the input)", false, false) : (info.Name, false, true)));
         var output = DeviceColumn("Bread Board mic (what others hear)", DeviceKind.Output, () => _sb.Config.Devices.OutputDeviceId,
             id => _sb.SetDevicesAsync(d => d.OutputDeviceId = id), "Auto: Bread Board mic",
             null, null, null, () => _sb.Status.Output, info => info.IsVirtualCable ? ("Bread Board mic · " + info.Name, true, true) : (info.Name, false, true));
         output.Children.Add(WindowsMicRow());
+        output.Children.Add(LevelRow("Mic level", "The Bread Board mic's own volume, as Discord and games receive it (Sound settings › Bread Board Mic › Volume).", () => _sb.BreadBoardMicLevel, _sb.SetBreadBoardMicLevel));
         grid.Children.Add(output);
         grid.Children.Add(DeviceColumn("Monitor (your headphones)", DeviceKind.Output, () => _sb.Config.Devices.MonitorDeviceId,
             id => _sb.SetDevicesAsync(d => d.MonitorDeviceId = id), "System default speakers",

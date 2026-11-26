@@ -150,7 +150,7 @@ public sealed class AudioHost : IAsyncDisposable
         }
         outDevice?.Dispose();
 
-        using (var micDevice = Devices.Resolve(DeviceKind.Input, dev.InputDeviceId))
+        using (var micDevice = Devices.ResolveMic(dev.InputDeviceId, dev.WindowsMicBefore))
         {
             if (!dev.MicEnabled)
             {

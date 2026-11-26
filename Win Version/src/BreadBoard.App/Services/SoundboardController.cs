@@ -112,6 +112,7 @@ public sealed partial class SoundboardController : IDisposable
         audio.Soundboard.PlayingChanged += ids => _ui.BeginInvoke(() => OnPlayingChanged(ids));
         audio.StatusChanged += _ => _ui.BeginInvoke(UpdateEngineSummary);
         audio.Devices.DevicesChanged += () => _ui.BeginInvoke(RaiseDevicesListChanged);
+        ClaimBreadBoardMic(audio.Devices);
         try
         {
             await audio.StartAsync(AudioConfig());

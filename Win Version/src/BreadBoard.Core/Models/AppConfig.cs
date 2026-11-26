@@ -90,7 +90,9 @@ public sealed class DeviceSettings
     /// <summary>Plays the monitor mix (by default your soundboard) on <see cref="MonitorDeviceId"/> so you hear it.</summary>
     public bool MonitorEnabled { get; set; } = true;
     public AppSourceSelection? AppSource { get; set; }
-    /// <summary>Windows' default microphone before Bread Board's mic replaced it; restored when switched back.</summary>
+    /// <summary>While Bread Board runs, its mic is Windows' default microphone (apps on "Default" hear it).</summary>
+    public bool UseAsWindowsMic { get; set; }
+    /// <summary>Windows' default microphone before Bread Board's mic replaced it; given back on quit or when switched off.</summary>
     public string? WindowsMicBefore { get; set; }
     /// <summary>Audio buffer size in ms for outputs and captures: lower = less delay, higher = fewer dropouts.</summary>
     public int LatencyMs { get; set; } = DefaultLatencyMs;
@@ -127,6 +129,9 @@ public sealed class UiSettings
     public double WindowHeight { get; set; } = 800;
     public bool WindowMaximized { get; set; }
     public string LastPage { get; set; } = "Soundboard";
+    /// <summary>Closing the window keeps Bread Board running in the tray (shortcuts and the mic keep working).</summary>
+    public bool CloseToTray { get; set; } = true;
+    public bool TrayHintShown { get; set; }
 
     public double? MiniLeft { get; set; }
     public double? MiniTop { get; set; }

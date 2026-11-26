@@ -28,6 +28,7 @@ try
         "selftest" => await SelfTest(),
         "probe" => await Probe(),
         "tone" => await PlayTone(),
+        "mic" when args.Length > 1 => Mic(args[1]),
         _ => Usage(),
     };
 }
@@ -57,6 +58,20 @@ int Usage()
           bb tone [--seconds N] [--speakers] play a 440 Hz tone (a capturable test app)
           --verbose                          echo the log to the console
         """);
+    return 0;
+}
+
+// bb mic name|hide|show|list: the Bread Board mic device (the virtual cable) as other apps see it.
+int Mic(string action)
+{
+    using var devices = new DeviceService();
+    switch (action)
+    {
+        case "name": Console.WriteLine(devices.NameBreadBoardDevices() ? "Renamed." : "Windows refused the new name."); break;
+        case "hide": devices.SetBreadBoardDevicesEnabled(false); break;
+        case "show": devices.SetBreadBoardDevicesEnabled(true); break;
+    }
+    foreach (var e in devices.BreadBoardEndpoints()) Console.WriteLine($"{e.Kind,-6} {(e.Enabled ? "enabled " : "disabled")} {e.Name}");
     return 0;
 }
 

@@ -49,6 +49,7 @@ public sealed class AppHost
             try { await _audio.Value.DisposeAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(3)).ConfigureAwait(false); }
             catch (Exception ex) { Log.Error("Audio engine shutdown failed", ex); }
         }
+        if (!Options.IsAutomated) Step("bread board mic", () => SoundboardController.ReleaseBreadBoardMic(Config)); // test runs leave your devices alone
         Step("config", Config.Dispose);
         Log.Info("Shutdown complete");
         Log.Flush();

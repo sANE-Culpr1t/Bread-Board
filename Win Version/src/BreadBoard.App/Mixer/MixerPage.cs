@@ -226,6 +226,24 @@ public sealed class MixerPage : UserControl
         return p;
     }
 
+    /// <summary>Plays back exactly what Discord and games receive, in your headphones.</summary>
+    private Button LoopbackTestButton()
+    {
+        var b = PageKit.Button("Test: hear what others hear", tooltip: "Plays the Bread Board mic (your voice, sounds and app audio, exactly as Discord receives them) in your headphones. Click again to stop.");
+        b.HorizontalAlignment = HorizontalAlignment.Stretch;
+        b.Margin = new Thickness(0, 10, 0, 0);
+        System.Windows.Automation.AutomationProperties.SetName(b, "Test loopback");
+        b.Click += async (_, _) => await _sb.SetLoopbackTestAsync(!_sb.LoopbackTestRunning);
+        _refreshers.Add(() =>
+        {
+            var on = _sb.LoopbackTestRunning;
+            b.Content = on ? "Stop test" : "Test: hear what others hear";
+            b.Foreground = Res(on ? "Accent2Brush" : "InkBrush");
+            b.IsEnabled = !_sb.VirtualCableMissing;
+        });
+        return b;
+    }
+
     private static DockPanel RoutingRow(string label, CheckBox sw)
     {
         var d = new DockPanel { Margin = new Thickness(0, 4, 0, 4) };
@@ -390,6 +408,7 @@ public sealed class MixerPage : UserControl
             id => _sb.SetDevicesAsync(d => d.OutputDeviceId = id), "Auto: Bread Board mic",
             null, null, null, () => _sb.Status.Output, info => info.IsVirtualCable ? ("Bread Board mic · " + info.Name, true, true) : (info.Name, false, true));
         output.Children.Add(WindowsMicRow());
+        output.Children.Add(LoopbackTestButton());
         output.Children.Add(LevelRow("Mic level", "The Bread Board mic's own volume, as Discord and games receive it (Sound settings › Bread Board Mic › Volume).", () => _sb.BreadBoardMicLevel, _sb.SetBreadBoardMicLevel));
         grid.Children.Add(output);
         grid.Children.Add(DeviceColumn("Monitor (your headphones)", DeviceKind.Output, () => _sb.Config.Devices.MonitorDeviceId,

@@ -107,6 +107,44 @@ public sealed class AudioHost : IAsyncDisposable
         }
     }
 
+    private CaptureSource? _loopCapture;
+    private OutputDevice? _loopOut;
+
+    public bool LoopbackTestRunning => _loopOut is not null;
+
+    /// <summary>
+    /// Plays what apps receive from the Bread Board mic (its recording side) in your headphones, so you hear
+    /// exactly what Discord hears. Returns null when started, otherwise why it couldn't.
+    /// </summary>
+    public string? StartLoopbackTest()
+    {
+        StopLoopbackTest();
+        if (Devices.FindVirtualCableInput() is not { } mic) return "There's no Bread Board mic to listen to.";
+        using var micDevice = Devices.Resolve(DeviceKind.Input, mic.Id);
+        using var headphones = Devices.Resolve(DeviceKind.Output, _config.Devices.MonitorDeviceId);
+        if (micDevice is null || headphones is null) return "Your headphones or the Bread Board mic aren't available.";
+        if (DeviceService.IsVirtualCable(headphones.FriendlyName)) return "Pick your headphones as the monitor first (Mixer > Monitor).";
+        try
+        {
+            _loopCapture = CaptureSource.StartDevice(micDevice, _config.Devices.LatencyMs);
+            _loopOut = OutputDevice.Start(headphones, new RingBufferSampleProvider(_loopCapture.Buffer), _config.Devices.LatencyMs);
+            Log.Info($"Loopback test: {mic.Name} -> {headphones.FriendlyName}");
+            return null;
+        }
+        catch (Exception ex) when (ex is System.Runtime.InteropServices.COMException or InvalidOperationException)
+        {
+            Log.Warn("Loopback test failed", ex);
+            StopLoopbackTest();
+            return ex.Message;
+        }
+    }
+
+    public void StopLoopbackTest()
+    {
+        _loopOut?.Dispose(); _loopOut = null;
+        _loopCapture?.Dispose(); _loopCapture = null;
+    }
+
     /// <summary>Decodes and registers a sound so it can be triggered. Runs on a worker thread.</summary>
     public Task<SoundClip> LoadSoundAsync(SoundEntry s) => Task.Run(() =>
     {
@@ -353,6 +391,7 @@ public sealed class AudioHost : IAsyncDisposable
             StopApp(new(SourceState.Off, null));
             StopMic(new(SourceState.Off, null));
             StopMonitor(new(SourceState.Off, null));
+            StopLoopbackTest();
             _output?.Dispose(); _output = null;
             Devices.Dispose();
         }

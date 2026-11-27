@@ -1,4 +1,4 @@
-﻿using BreadBoard.Audio.Devices;
+using BreadBoard.Audio.Devices;
 using BreadBoard.Audio.Sources;
 using BreadBoard.Core.Logging;
 
@@ -119,6 +119,18 @@ public sealed partial class SoundboardController
             if (_disposed || !_audio.IsValueCreated || _audio.Value.Devices.FindVirtualCableInput() is not { } mic) return null;
             return _audio.Value.Devices.GetVolume(mic.Id) is { } v ? (int)Math.Round(v * 100) : null;
         }
+    }
+
+    public bool LoopbackTestRunning => _audio.IsValueCreated && _audio.Value.LoopbackTestRunning;
+
+    /// <summary>Starts or stops playing what others hear (the Bread Board mic) in your headphones.</summary>
+    public async Task SetLoopbackTestAsync(bool on)
+    {
+        await EnsureEngineAsync();
+        if (!on) _audio.Value.StopLoopbackTest();
+        else if (_audio.Value.StartLoopbackTest() is { } why) Notice?.Invoke($"Test couldn't start: {why}", true);
+        else Notice?.Invoke("Playing what others hear in your headphones. Talk or play a sound.", false);
+        MixChanged?.Invoke();
     }
 
     public void SetBreadBoardMicLevel(int percent)
